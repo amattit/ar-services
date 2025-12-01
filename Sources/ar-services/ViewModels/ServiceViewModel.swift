@@ -15,7 +15,7 @@ class ServiceViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    private let apiService = APIService.shared
+    private let apiService = MockAPIService.shared // Use MockAPIService for testing
     
     // MARK: - Dashboard
     

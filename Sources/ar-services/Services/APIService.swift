@@ -152,6 +152,115 @@ private let baseURL = "http://localhost:8080/api/v1"
             deprecated: deprecated
         )
     }
+    
+    // MARK: - Dependencies API
+    
+    func fetchDependencies() async throws -> [DependencyResponse] {
+        let url = URL(string: "\(baseURL)/dependencies")!
+        let (data, response) = try await session.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw APIError.invalidResponse
+        }
+        
+        return try decoder.decode([DependencyResponse].self, from: data)
+    }
+    
+    func fetchServiceDependencies(serviceId: UUID) async throws -> [DependencyResponse] {
+        let url = URL(string: "\(baseURL)/services/\(serviceId)/dependencies")!
+        let (data, response) = try await session.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw APIError.invalidResponse
+        }
+        
+        return try decoder.decode([DependencyResponse].self, from: data)
+    }
+    
+    func createDependency(_ request: CreateDependencyRequest) async throws -> DependencyResponse {
+        let url = URL(string: "\(baseURL)/dependencies")!
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.httpBody = try encoder.encode(request)
+        
+        let (data, response) = try await session.data(for: urlRequest)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        switch httpResponse.statusCode {
+        case 200, 201:
+            return try decoder.decode(DependencyResponse.self, from: data)
+        case 409:
+            throw APIError.dependencyAlreadyExists
+        case 400:
+            throw APIError.validationError
+        default:
+            throw APIError.serverError
+        }
+    }
+    
+    func updateDependency(id: UUID, request: UpdateDependencyRequest) async throws -> DependencyResponse {
+        let url = URL(string: "\(baseURL)/dependencies/\(id)")!
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "PATCH"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.httpBody = try encoder.encode(request)
+        
+        let (data, response) = try await session.data(for: urlRequest)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        switch httpResponse.statusCode {
+        case 200:
+            return try decoder.decode(DependencyResponse.self, from: data)
+        case 404:
+            throw APIError.dependencyNotFound
+        case 400:
+            throw APIError.validationError
+        default:
+            throw APIError.serverError
+        }
+    }
+    
+    func deleteDependency(id: UUID) async throws {
+        let url = URL(string: "\(baseURL)/dependencies/\(id)")!
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "DELETE"
+        
+        let (_, response) = try await session.data(for: urlRequest)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        switch httpResponse.statusCode {
+        case 204:
+            return
+        case 404:
+            throw APIError.dependencyNotFound
+        default:
+            throw APIError.serverError
+        }
+    }
+    
+    func fetchDependencyGraph() async throws -> DependencyGraph {
+        let url = URL(string: "\(baseURL)/dependencies/graph")!
+        let (data, response) = try await session.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw APIError.invalidResponse
+        }
+        
+        return try decoder.decode(DependencyGraph.self, from: data)
+    }
 }
 
 // MARK: - API Errors
@@ -160,6 +269,8 @@ enum APIError: LocalizedError {
     case invalidResponse
     case serviceNotFound
     case serviceAlreadyExists
+    case dependencyNotFound
+    case dependencyAlreadyExists
     case validationError
     case serverError
     case networkError
@@ -172,6 +283,10 @@ enum APIError: LocalizedError {
             return "Сервис не найден"
         case .serviceAlreadyExists:
             return "Сервис с таким именем уже существует"
+        case .dependencyNotFound:
+            return "Зависимость не найдена"
+        case .dependencyAlreadyExists:
+            return "Зависимость уже существует"
         case .validationError:
             return "Ошибка валидации данных"
         case .serverError:

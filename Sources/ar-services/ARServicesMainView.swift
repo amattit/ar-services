@@ -26,8 +26,7 @@ struct ARServicesMainView: View {
                 }
                 .tag(1)
             
-            // Placeholder for future tabs
-            Text("Зависимости")
+            DependenciesView()
                 .tabItem {
                     Label("Зависимости", systemImage: "arrow.triangle.branch")
                 }

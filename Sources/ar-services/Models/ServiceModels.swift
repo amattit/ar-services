@@ -109,3 +109,92 @@ struct DashboardStats {
     let endpoints: Int
     let deprecated: Int
 }
+
+// MARK: - Dependency Models
+
+struct DependencyResponse: Decodable, Identifiable {
+    let dependencyId: UUID
+    let serviceId: UUID
+    let dependsOnServiceId: UUID
+    let dependencyType: DependencyType
+    let description: String?
+    let createdAt: Date?
+    let updatedAt: Date?
+    
+    // Дополнительные поля для отображения
+    let serviceName: String?
+    let dependsOnServiceName: String?
+    let serviceVersion: String?
+    let dependsOnServiceVersion: String?
+    
+    var id: UUID { dependencyId }
+}
+
+struct CreateDependencyRequest: Encodable {
+    let serviceId: UUID
+    let dependsOnServiceId: UUID
+    let dependencyType: DependencyType
+    let description: String?
+}
+
+struct UpdateDependencyRequest: Encodable {
+    let dependencyType: DependencyType?
+    let description: String?
+}
+
+enum DependencyType: String, Codable, CaseIterable {
+    case SYNCHRONOUS = "SYNCHRONOUS"
+    case ASYNCHRONOUS = "ASYNCHRONOUS"
+    case DATABASE = "DATABASE"
+    
+    var displayName: String {
+        switch self {
+        case .SYNCHRONOUS:
+            return "Синхронная"
+        case .ASYNCHRONOUS:
+            return "Асинхронная"
+        case .DATABASE:
+            return "База данных"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .SYNCHRONOUS:
+            return "прямые HTTP вызовы между сервисами"
+        case .ASYNCHRONOUS:
+            return "взаимодействие через очереди сообщений"
+        case .DATABASE:
+            return "общие базы данных между сервисами"
+        }
+    }
+}
+
+// MARK: - Dependency Graph Models
+
+struct DependencyGraph {
+    let nodes: [DependencyNode]
+    let edges: [DependencyEdge]
+}
+
+struct DependencyNode: Identifiable {
+    let id: UUID
+    let name: String
+    let serviceType: ServiceType
+    let dependencyCount: Int
+    let dependentCount: Int
+    
+    var displayName: String { name }
+}
+
+struct DependencyEdge: Identifiable {
+    let id: UUID
+    let fromNodeId: UUID
+    let toNodeId: UUID
+    let dependencyType: DependencyType
+    let description: String?
+    
+    var displayLabel: String {
+        dependencyType.displayName
+    }
+}
