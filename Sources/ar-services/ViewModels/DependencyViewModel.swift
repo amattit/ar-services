@@ -20,7 +20,7 @@ class DependencyViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    private let apiService = APIService.shared//MockAPIService.shared // Use MockAPIService for testing
+    private let apiService = APIService.shared // Use MockAPIService for testing
     
     // MARK: - Dependencies Management
     
@@ -37,6 +37,9 @@ class DependencyViewModel: ObservableObject {
             
             // Load all service dependencies
             await loadAllServiceDependencies()
+            
+            // Load service-to-service dependencies
+            await loadServiceToServiceDependencies()
             
         } catch {
             errorMessage = error.localizedDescription
@@ -204,5 +207,71 @@ class DependencyViewModel: ObservableObject {
     
     func serviceName(for serviceId: UUID) -> String {
         services.first { $0.serviceId == serviceId }?.name ?? "Unknown Service"
+    }
+    
+    // MARK: - Service-to-Service Dependencies
+    
+    @Published var serviceToServiceDependencies: [ServiceToServiceDependencyResponse] = []
+    @Published var filteredServiceToServiceDependencies: [ServiceToServiceDependencyResponse] = []
+    
+    func loadServiceToServiceDependencies() async {
+        var allServiceToServiceDependencies: [ServiceToServiceDependencyResponse] = []
+        
+        for service in services {
+            do {
+                let dependencies = try await apiService.fetchServiceToServiceDependencies(serviceId: service.serviceId)
+                allServiceToServiceDependencies.append(contentsOf: dependencies)
+            } catch {
+                print("Failed to load service-to-service dependencies for \(service.name): \(error)")
+            }
+        }
+        
+        serviceToServiceDependencies = allServiceToServiceDependencies
+        filterServiceToServiceDependencies()
+    }
+    
+    func createServiceToServiceDependency(consumerServiceId: UUID, request: CreateServiceToServiceDependencyRequest) async -> Bool {
+        do {
+            let newDependency = try await apiService.createServiceToServiceDependency(consumerServiceId: consumerServiceId, request: request)
+            serviceToServiceDependencies.append(newDependency)
+            filterServiceToServiceDependencies()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+    
+    func deleteServiceToServiceDependency(serviceId: UUID, dependencyId: UUID) async -> Bool {
+        do {
+            try await apiService.deleteServiceToServiceDependency(serviceId: serviceId, dependencyId: dependencyId)
+            serviceToServiceDependencies.removeAll { $0.id == dependencyId }
+            filterServiceToServiceDependencies()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+    
+    private func filterServiceToServiceDependencies() {
+        filteredServiceToServiceDependencies = serviceToServiceDependencies.filter { dependency in
+            let consumerService = serviceName(for: dependency.consumerService.id)
+            let providerService = serviceName(for: dependency.providerService.id)
+            let description = dependency.description ?? ""
+            
+            let matchesSearch = searchText.isEmpty ||
+                consumerService.localizedCaseInsensitiveContains(searchText) ||
+                providerService.localizedCaseInsensitiveContains(searchText) ||
+                description.localizedCaseInsensitiveContains(searchText)
+            
+            return matchesSearch
+        }
+    }
+    
+    var serviceToServiceStats: (total: Int, services: Int) {
+        let totalDependencies = filteredServiceToServiceDependencies.count
+        let uniqueServices = Set(filteredServiceToServiceDependencies.flatMap { [$0.consumerService.id, $0.providerService.id] }).count
+        return (total: totalDependencies, services: uniqueServices)
     }
 }

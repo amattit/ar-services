@@ -11,12 +11,21 @@ struct DependenciesView: View {
     @StateObject private var dependencyViewModel = DependencyViewModel()
     @State private var showingCreateDependency = false
     @State private var showingGraph = false
+    @State private var selectedTab: DependencyTab = .external
+    
+    enum DependencyTab: String, CaseIterable {
+        case external = "Внешние зависимости"
+        case serviceToService = "Связи между сервисами"
+    }
     
     var body: some View {
         NavigationStack {
             ScrollView {
                 // Header
                 headerView
+                
+                // Tab Selector
+                tabSelectorView
                 
                 // Search and Filter
                 searchAndFilterView
@@ -29,10 +38,21 @@ struct DependenciesView: View {
                     Spacer()
                     ProgressView("Загрузка зависимостей...")
                     Spacer()
-                } else if dependencyViewModel.filteredServiceDependencies.isEmpty {
-                    emptyStateView
                 } else {
-                    dependenciesListView
+                    switch selectedTab {
+                    case .external:
+                        if dependencyViewModel.filteredServiceDependencies.isEmpty {
+                            emptyStateView
+                        } else {
+                            dependenciesListView
+                        }
+                    case .serviceToService:
+                        if dependencyViewModel.filteredServiceToServiceDependencies.isEmpty {
+                            serviceToServiceEmptyStateView
+                        } else {
+                            serviceToServiceListView
+                        }
+                    }
                 }
                 
                 // Info Section
@@ -171,13 +191,24 @@ struct DependenciesView: View {
     
     private var statsView: some View {
         HStack(spacing: 20) {
-            Text("Найдено: \(dependencyViewModel.dependencyStats.total) зависимостей")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            
-            Text("Сервисов: \(dependencyViewModel.dependencyStats.services)")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+            switch selectedTab {
+            case .external:
+                Text("Найдено: \(dependencyViewModel.dependencyStats.total) зависимостей")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                Text("Сервисов: \(dependencyViewModel.dependencyStats.services)")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            case .serviceToService:
+                Text("Найдено: \(dependencyViewModel.serviceToServiceStats.total) связей")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                Text("Сервисов: \(dependencyViewModel.serviceToServiceStats.services)")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
             
             Spacer()
         }
@@ -447,6 +478,181 @@ struct ServiceDependencyRow: View {
             return .orange
         case .MESSAGE_QUEUE:
             return .red
+        }
+    }
+}
+
+// MARK: - Tab Selector
+
+extension DependenciesView {
+    private var tabSelectorView: some View {
+        Picker("Тип зависимостей", selection: $selectedTab) {
+            ForEach(DependencyTab.allCases, id: \.self) { tab in
+                Text(tab.rawValue).tag(tab)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 16)
+        .background(Color(.windowBackgroundColor))
+    }
+    
+    // MARK: - Service-to-Service Views
+    
+    private var serviceToServiceEmptyStateView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "arrow.triangle.swap")
+                .font(.system(size: 48))
+                .foregroundColor(.secondary)
+            
+            Text("Связи между сервисами не найдены")
+                .font(.headline)
+                .foregroundColor(.secondary)
+            
+            Text("Попробуйте изменить критерии поиска")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .padding(40)
+        .frame(maxWidth: .infinity)
+        .background(Color(.windowBackgroundColor))
+        .cornerRadius(12)
+        .padding(.horizontal, 20)
+    }
+    
+    private var serviceToServiceListView: some View {
+        LazyVStack(spacing: 16) {
+            ForEach(dependencyViewModel.filteredServiceToServiceDependencies, id: \.id) { dependency in
+                ServiceToServiceDependencyRow(
+                    dependency: dependency,
+                    dependencyViewModel: dependencyViewModel
+                )
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+}
+
+// MARK: - Service-to-Service Dependency Row
+
+struct ServiceToServiceDependencyRow: View {
+    let dependency: ServiceToServiceDependencyResponse
+    let dependencyViewModel: DependencyViewModel
+    @State private var showingDeleteAlert = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header with service names
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("От: \(dependencyViewModel.serviceName(for: dependency.consumerService.id))")
+                        .font(.system(.subheadline, design: .monospaced))
+                        .foregroundColor(.blue)
+                    
+                    Text("К: \(dependencyViewModel.serviceName(for: dependency.providerService.id))")
+                        .font(.system(.subheadline, design: .monospaced))
+                        .foregroundColor(.green)
+                }
+                
+                Spacer()
+                
+                HStack {
+                    Image(systemName: dependency.dependencyType.icon)
+                        .foregroundColor(colorForServiceDependencyType(dependency.dependencyType))
+                    Text(dependency.dependencyType.displayName)
+                        .font(.caption)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(colorForServiceDependencyType(dependency.dependencyType).opacity(0.1))
+                        .cornerRadius(4)
+                }
+                
+                Button("Удалить") {
+                    showingDeleteAlert = true
+                }
+                .font(.caption)
+                .foregroundColor(.red)
+            }
+            
+            // Description and environment
+            if let description = dependency.description, !description.isEmpty {
+                Text(description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            HStack {
+                if let environmentCode = dependency.environmentCode {
+                    Text("Окружение: \(environmentCode)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                if let createdAt = dependency.createdAt {
+                    Text("Создано: \(createdAt, style: .date)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            // Configuration
+            if !dependency.config.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Конфигурация:")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                    
+                    ForEach(Array(dependency.config.keys.sorted()), id: \.self) { key in
+                        HStack {
+                            Text("\(key):")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(dependency.config[key] ?? "")
+                                .font(.caption)
+                                .foregroundColor(.primary)
+                        }
+                    }
+                }
+                .padding(8)
+                .background(Color(.controlBackgroundColor))
+                .cornerRadius(6)
+            }
+        }
+        .padding(12)
+        .background(Color(.windowBackgroundColor))
+        .cornerRadius(8)
+        .alert("Удалить связь?", isPresented: $showingDeleteAlert) {
+            Button("Отмена", role: .cancel) { }
+            Button("Удалить", role: .destructive) {
+                Task {
+                    await dependencyViewModel.deleteServiceToServiceDependency(
+                        serviceId: dependency.consumerService.id,
+                        dependencyId: dependency.id
+                    )
+                }
+            }
+        } message: {
+            Text("Вы уверены, что хотите удалить связь между сервисами?")
+        }
+    }
+    
+    private func colorForServiceDependencyType(_ type: ServiceDependencyType) -> Color {
+        switch type {
+        case .API_CALL:
+            return .blue
+        case .EVENT_SUBSCRIPTION:
+            return .orange
+        case .DATA_SHARING:
+            return .purple
+        case .AUTHENTICATION:
+            return .green
+        case .PROXY:
+            return .red
+        case .LIBRARY_USAGE:
+            return .brown
         }
     }
 }
