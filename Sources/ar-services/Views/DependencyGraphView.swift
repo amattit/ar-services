@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct DependencyGraphView: View {
-    @EnvironmentObject private var dependencyViewModel: DependencyViewModel
+    let dependencyViewModel: DependencyViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var selectedNode: DependencyNode?
     @State private var scale: CGFloat = 1.0
@@ -184,17 +184,21 @@ struct DependencyGraphView: View {
             Text(node.name)
                 .font(.headline)
             
-            Text("Тип: \(node.serviceType.displayName)")
+            Text("Тип: \(node.type)")
                 .font(.caption)
                 .foregroundColor(.secondary)
             
-            Text("Зависимостей: \(node.dependencyCount)")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            if let serviceType = node.serviceType {
+                Text("Сервис: \(serviceType)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
             
-            Text("Зависят: \(node.dependentCount)")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            if let description = node.metadata["description"]?.value as? String, !description.isEmpty {
+                Text("Описание: \(description)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding(12)
         .background(
@@ -226,12 +230,16 @@ struct DependencyGraphView: View {
     
     private func colorForDependencyType(_ type: DependencyType) -> Color {
         switch type {
-        case .SYNCHRONOUS:
+        case .LIBRARY:
             return .blue
-        case .ASYNCHRONOUS:
-            return .orange
+        case .SERVICE:
+            return .green
         case .DATABASE:
             return .purple
+        case .EXTERNAL_API:
+            return .orange
+        case .MESSAGE_QUEUE:
+            return .red
         }
     }
 }
@@ -267,15 +275,26 @@ struct NodeView: View {
     }
     
     private var serviceTypeColor: Color {
-        switch node.serviceType {
-        case .APPLICATION:
+        if node.type == "service" {
+            // Color based on service type from metadata
+            if let serviceType = node.serviceType {
+                switch serviceType.uppercased() {
+                case "APPLICATION":
+                    return .blue
+                case "LIBRARY":
+                    return .green
+                case "JOB":
+                    return .orange
+                case "PROXY":
+                    return .purple
+                default:
+                    return .gray
+                }
+            }
             return .blue
-        case .LIBRARY:
-            return .green
-        case .JOB:
-            return .orange
-        case .PROXY:
-            return .purple
+        } else {
+            // Color for dependencies
+            return .gray
         }
     }
 }

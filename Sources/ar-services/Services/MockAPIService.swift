@@ -15,6 +15,7 @@ class MockAPIService: ObservableObject {
     
     private var mockServices: [ServiceResponse] = []
     private var mockDependencies: [DependencyResponse] = []
+    private var mockServiceDependencies: [ServiceDependencyResponse] = []
     
     private init() {
         setupMockData()
@@ -112,9 +113,9 @@ class MockAPIService: ObservableObject {
         return mockDependencies
     }
     
-    func fetchServiceDependencies(serviceId: UUID) async throws -> [DependencyResponse] {
+    func fetchServiceDependencies(serviceId: UUID) async throws -> [ServiceDependencyResponse] {
         try await Task.sleep(nanoseconds: 300_000_000)
-        return mockDependencies.filter { $0.serviceId == serviceId }
+        return mockServiceDependencies.filter { $0.serviceId == serviceId }
     }
     
     func createDependency(_ request: CreateDependencyRequest) async throws -> DependencyResponse {
@@ -122,31 +123,54 @@ class MockAPIService: ObservableObject {
         
         // Check if dependency already exists
         if mockDependencies.contains(where: { 
-            $0.serviceId == request.serviceId && 
-            $0.dependsOnServiceId == request.dependsOnServiceId 
+            $0.name == request.name && $0.version == request.version
         }) {
             throw APIError.dependencyAlreadyExists
         }
         
-        let serviceName = mockServices.first { $0.serviceId == request.serviceId }?.name
-        let dependsOnServiceName = mockServices.first { $0.serviceId == request.dependsOnServiceId }?.name
-        
         let newDependency = DependencyResponse(
             dependencyId: UUID(),
-            serviceId: request.serviceId,
-            dependsOnServiceId: request.dependsOnServiceId,
-            dependencyType: request.dependencyType,
+            name: request.name,
             description: request.description,
+            version: request.version,
+            dependencyType: request.dependencyType,
+            config: request.config,
             createdAt: Date(),
-            updatedAt: Date(),
-            serviceName: serviceName,
-            dependsOnServiceName: dependsOnServiceName,
-            serviceVersion: "v1.0.0",
-            dependsOnServiceVersion: "v1.0.0"
+            updatedAt: Date()
         )
         
         mockDependencies.append(newDependency)
         return newDependency
+    }
+    
+    func createServiceDependency(serviceId: UUID, request: CreateServiceDependencyRequest) async throws -> ServiceDependencyResponse {
+        try await Task.sleep(nanoseconds: 500_000_000)
+        
+        // Check if service dependency already exists
+        if mockServiceDependencies.contains(where: { 
+            $0.serviceId == serviceId && 
+            $0.dependency.dependencyId == request.dependencyId &&
+            $0.environmentCode == request.environmentCode
+        }) {
+            throw APIError.dependencyAlreadyExists
+        }
+        
+        guard let dependency = mockDependencies.first(where: { $0.dependencyId == request.dependencyId }) else {
+            throw APIError.dependencyNotFound
+        }
+        
+        let newServiceDependency = ServiceDependencyResponse(
+            serviceDependencyId: UUID(),
+            serviceId: serviceId,
+            dependency: dependency,
+            environmentCode: request.environmentCode,
+            configOverride: request.configOverride,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        
+        mockServiceDependencies.append(newServiceDependency)
+        return newServiceDependency
     }
     
     func updateDependency(id: UUID, request: UpdateDependencyRequest) async throws -> DependencyResponse {
@@ -159,16 +183,13 @@ class MockAPIService: ObservableObject {
         let existingDependency = mockDependencies[index]
         let updatedDependency = DependencyResponse(
             dependencyId: existingDependency.dependencyId,
-            serviceId: existingDependency.serviceId,
-            dependsOnServiceId: existingDependency.dependsOnServiceId,
-            dependencyType: request.dependencyType ?? existingDependency.dependencyType,
+            name: request.name ?? existingDependency.name,
             description: request.description ?? existingDependency.description,
+            version: request.version ?? existingDependency.version,
+            dependencyType: request.dependencyType ?? existingDependency.dependencyType,
+            config: request.config ?? existingDependency.config,
             createdAt: existingDependency.createdAt,
-            updatedAt: Date(),
-            serviceName: existingDependency.serviceName,
-            dependsOnServiceName: existingDependency.dependsOnServiceName,
-            serviceVersion: existingDependency.serviceVersion,
-            dependsOnServiceVersion: existingDependency.dependsOnServiceVersion
+            updatedAt: Date()
         )
         
         mockDependencies[index] = updatedDependency
@@ -183,35 +204,63 @@ class MockAPIService: ObservableObject {
         }
         
         mockDependencies.remove(at: index)
+        
+        // Also remove related service dependencies
+        mockServiceDependencies.removeAll { $0.dependency.dependencyId == id }
     }
     
-    func fetchDependencyGraph() async throws -> DependencyGraph {
+    func deleteServiceDependency(serviceId: UUID, dependencyId: UUID, environmentCode: String?) async throws {
+        try await Task.sleep(nanoseconds: 300_000_000)
+        
+        guard let index = mockServiceDependencies.firstIndex(where: { 
+            $0.serviceId == serviceId && 
+            $0.dependency.dependencyId == dependencyId &&
+            $0.environmentCode == environmentCode
+        }) else {
+            throw APIError.dependencyNotFound
+        }
+        
+        mockServiceDependencies.remove(at: index)
+    }
+    
+    func fetchDependencyGraph() async throws -> ServiceDependencyGraphResponse {
         try await Task.sleep(nanoseconds: 800_000_000)
         
         let nodes = mockServices.map { service in
-            let dependencyCount = mockDependencies.filter { $0.serviceId == service.serviceId }.count
-            let dependentCount = mockDependencies.filter { $0.dependsOnServiceId == service.serviceId }.count
-            
-            return DependencyNode(
-                id: service.serviceId,
+            DependencyNode(
+                id: service.serviceId.uuidString,
                 name: service.name,
-                serviceType: service.serviceType,
-                dependencyCount: dependencyCount,
-                dependentCount: dependentCount
+                type: "service",
+                serviceType: service.serviceType.rawValue,
+                metadata: [
+                    "description": AnyCodable(service.description),
+                    "owner": AnyCodable(service.owner),
+                    "tags": AnyCodable(service.tags)
+                ]
             )
         }
         
-        let edges = mockDependencies.map { dependency in
+        let edges = mockServiceDependencies.map { serviceDep in
             DependencyEdge(
-                id: dependency.dependencyId,
-                fromNodeId: dependency.serviceId,
-                toNodeId: dependency.dependsOnServiceId,
-                dependencyType: dependency.dependencyType,
-                description: dependency.description
+                from: serviceDep.serviceId.uuidString,
+                to: serviceDep.dependency.dependencyId.uuidString,
+                type: "service_dependency",
+                metadata: [
+                    "dependencyType": AnyCodable(serviceDep.dependency.dependencyType.rawValue),
+                    "version": AnyCodable(serviceDep.dependency.version)
+                ]
             )
         }
         
-        return DependencyGraph(nodes: nodes, edges: edges)
+        return ServiceDependencyGraphResponse(
+            nodes: nodes,
+            edges: edges,
+            metadata: [
+                "totalServices": AnyCodable(mockServices.count),
+                "totalDependencies": AnyCodable(edges.count),
+                "generatedAt": AnyCodable(ISO8601DateFormatter().string(from: Date()))
+            ]
+        )
     }
     
     // MARK: - Dashboard Stats
@@ -348,63 +397,148 @@ class MockAPIService: ObservableObject {
         
         mockServices = [userService, authService, orderService, paymentService]
         
-        // Create mock dependencies
-        let dependency1 = DependencyResponse(
+        // Create mock dependencies (libraries, external services, etc.)
+        let jwtLibrary = DependencyResponse(
             dependencyId: UUID(),
-            serviceId: userService.serviceId,
-            dependsOnServiceId: authService.serviceId,
-            dependencyType: .SYNCHRONOUS,
-            description: "Аутентификация пользователей",
-            createdAt: Calendar.current.date(byAdding: .day, value: -15, to: Date()),
-            updatedAt: Date(),
-            serviceName: userService.name,
-            dependsOnServiceName: authService.name,
-            serviceVersion: "v1.2.0",
-            dependsOnServiceVersion: "v1.0.0"
+            name: "jwt-library",
+            description: "Библиотека для работы с JWT токенами",
+            version: "3.2.1",
+            dependencyType: .LIBRARY,
+            config: ["algorithm": "HS256", "expiration": "24h"],
+            createdAt: Calendar.current.date(byAdding: .day, value: -30, to: Date()),
+            updatedAt: Date()
         )
         
-        let dependency2 = DependencyResponse(
+        let postgresDB = DependencyResponse(
             dependencyId: UUID(),
-            serviceId: orderService.serviceId,
-            dependsOnServiceId: userService.serviceId,
-            dependencyType: .ASYNCHRONOUS,
-            description: "Получение информации о пользователе",
-            createdAt: Calendar.current.date(byAdding: .day, value: -10, to: Date()),
-            updatedAt: Date(),
-            serviceName: orderService.name,
-            dependsOnServiceName: userService.name,
-            serviceVersion: "v2.1.0",
-            dependsOnServiceVersion: "v1.2.0"
-        )
-        
-        let dependency3 = DependencyResponse(
-            dependencyId: UUID(),
-            serviceId: orderService.serviceId,
-            dependsOnServiceId: paymentService.serviceId,
-            dependencyType: .SYNCHRONOUS,
-            description: "Обработка платежей за заказы",
-            createdAt: Calendar.current.date(byAdding: .day, value: -8, to: Date()),
-            updatedAt: Date(),
-            serviceName: orderService.name,
-            dependsOnServiceName: paymentService.name,
-            serviceVersion: "v2.1.0",
-            dependsOnServiceVersion: "v1.0.0"
-        )
-        
-        let dependency4 = DependencyResponse(
-            dependencyId: UUID(),
-            serviceId: paymentService.serviceId,
-            dependsOnServiceId: userService.serviceId,
+            name: "postgresql",
+            description: "Основная база данных PostgreSQL",
+            version: "14.5",
             dependencyType: .DATABASE,
-            description: "Общая база данных пользователей",
-            createdAt: Calendar.current.date(byAdding: .day, value: -5, to: Date()),
-            updatedAt: Date(),
-            serviceName: paymentService.name,
-            dependsOnServiceName: userService.name,
-            serviceVersion: "v1.0.0",
-            dependsOnServiceVersion: "v1.2.0"
+            config: ["host": "localhost", "port": "5432", "ssl": "require"],
+            createdAt: Calendar.current.date(byAdding: .day, value: -25, to: Date()),
+            updatedAt: Date()
         )
         
-        mockDependencies = [dependency1, dependency2, dependency3, dependency4]
+        let redisCache = DependencyResponse(
+            dependencyId: UUID(),
+            name: "redis",
+            description: "Кэш и хранилище сессий",
+            version: "7.0",
+            dependencyType: .DATABASE,
+            config: ["host": "localhost", "port": "6379", "ttl": "3600"],
+            createdAt: Calendar.current.date(byAdding: .day, value: -20, to: Date()),
+            updatedAt: Date()
+        )
+        
+        let rabbitMQ = DependencyResponse(
+            dependencyId: UUID(),
+            name: "rabbitmq",
+            description: "Система очередей сообщений",
+            version: "3.11",
+            dependencyType: .MESSAGE_QUEUE,
+            config: ["host": "localhost", "port": "5672", "vhost": "/"],
+            createdAt: Calendar.current.date(byAdding: .day, value: -15, to: Date()),
+            updatedAt: Date()
+        )
+        
+        let stripeAPI = DependencyResponse(
+            dependencyId: UUID(),
+            name: "stripe-api",
+            description: "Внешний API для обработки платежей",
+            version: "2023-10-16",
+            dependencyType: .EXTERNAL_API,
+            config: ["base_url": "https://api.stripe.com", "version": "2023-10-16"],
+            createdAt: Calendar.current.date(byAdding: .day, value: -10, to: Date()),
+            updatedAt: Date()
+        )
+        
+        mockDependencies = [jwtLibrary, postgresDB, redisCache, rabbitMQ, stripeAPI]
+        
+        // Create mock service dependencies
+        let userServiceJWT = ServiceDependencyResponse(
+            serviceDependencyId: UUID(),
+            serviceId: userService.serviceId,
+            dependency: jwtLibrary,
+            environmentCode: "prod",
+            configOverride: ["expiration": "12h"],
+            createdAt: Calendar.current.date(byAdding: .day, value: -15, to: Date()),
+            updatedAt: Date()
+        )
+        
+        let userServiceDB = ServiceDependencyResponse(
+            serviceDependencyId: UUID(),
+            serviceId: userService.serviceId,
+            dependency: postgresDB,
+            environmentCode: "prod",
+            configOverride: ["database": "users_db"],
+            createdAt: Calendar.current.date(byAdding: .day, value: -15, to: Date()),
+            updatedAt: Date()
+        )
+        
+        let authServiceJWT = ServiceDependencyResponse(
+            serviceDependencyId: UUID(),
+            serviceId: authService.serviceId,
+            dependency: jwtLibrary,
+            environmentCode: "prod",
+            configOverride: [:],
+            createdAt: Calendar.current.date(byAdding: .day, value: -12, to: Date()),
+            updatedAt: Date()
+        )
+        
+        let authServiceRedis = ServiceDependencyResponse(
+            serviceDependencyId: UUID(),
+            serviceId: authService.serviceId,
+            dependency: redisCache,
+            environmentCode: "prod",
+            configOverride: ["database": "1"],
+            createdAt: Calendar.current.date(byAdding: .day, value: -12, to: Date()),
+            updatedAt: Date()
+        )
+        
+        let orderServiceDB = ServiceDependencyResponse(
+            serviceDependencyId: UUID(),
+            serviceId: orderService.serviceId,
+            dependency: postgresDB,
+            environmentCode: "prod",
+            configOverride: ["database": "orders_db"],
+            createdAt: Calendar.current.date(byAdding: .day, value: -10, to: Date()),
+            updatedAt: Date()
+        )
+        
+        let orderServiceQueue = ServiceDependencyResponse(
+            serviceDependencyId: UUID(),
+            serviceId: orderService.serviceId,
+            dependency: rabbitMQ,
+            environmentCode: "prod",
+            configOverride: ["queue": "order_events"],
+            createdAt: Calendar.current.date(byAdding: .day, value: -10, to: Date()),
+            updatedAt: Date()
+        )
+        
+        let paymentServiceStripe = ServiceDependencyResponse(
+            serviceDependencyId: UUID(),
+            serviceId: paymentService.serviceId,
+            dependency: stripeAPI,
+            environmentCode: "prod",
+            configOverride: [:],
+            createdAt: Calendar.current.date(byAdding: .day, value: -8, to: Date()),
+            updatedAt: Date()
+        )
+        
+        let paymentServiceDB = ServiceDependencyResponse(
+            serviceDependencyId: UUID(),
+            serviceId: paymentService.serviceId,
+            dependency: postgresDB,
+            environmentCode: "prod",
+            configOverride: ["database": "payments_db"],
+            createdAt: Calendar.current.date(byAdding: .day, value: -8, to: Date()),
+            updatedAt: Date()
+        )
+        
+        mockServiceDependencies = [
+            userServiceJWT, userServiceDB, authServiceJWT, authServiceRedis,
+            orderServiceDB, orderServiceQueue, paymentServiceStripe, paymentServiceDB
+        ]
     }
 }

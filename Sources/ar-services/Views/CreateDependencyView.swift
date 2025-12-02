@@ -8,19 +8,37 @@
 import SwiftUI
 
 struct CreateDependencyView: View {
-    @EnvironmentObject private var dependencyViewModel: DependencyViewModel
+    let dependencyViewModel: DependencyViewModel
     @Environment(\.dismiss) private var dismiss
     
+    @State private var createMode: CreateMode = .dependency
+    
+    // For creating new dependency
+    @State private var dependencyName: String = ""
+    @State private var dependencyDescription: String = ""
+    @State private var dependencyVersion: String = ""
+    @State private var dependencyType: DependencyType = .LIBRARY
+    @State private var dependencyConfig: [String: String] = [:]
+    
+    // For adding service dependency
     @State private var selectedServiceId: UUID?
-    @State private var selectedDependsOnServiceId: UUID?
-    @State private var selectedDependencyType: DependencyType = .SYNCHRONOUS
-    @State private var description: String = ""
+    @State private var selectedDependencyId: UUID?
+    @State private var environmentCode: String = "prod"
+    
     @State private var isCreating = false
     
+    enum CreateMode: String, CaseIterable {
+        case dependency = "Новая зависимость"
+        case serviceDependency = "Добавить к сервису"
+    }
+    
     private var isFormValid: Bool {
-        selectedServiceId != nil &&
-        selectedDependsOnServiceId != nil &&
-        selectedServiceId != selectedDependsOnServiceId
+        switch createMode {
+        case .dependency:
+            return !dependencyName.isEmpty && !dependencyVersion.isEmpty
+        case .serviceDependency:
+            return selectedServiceId != nil && selectedDependencyId != nil
+        }
     }
     
     var body: some View {
@@ -29,13 +47,18 @@ struct CreateDependencyView: View {
                 // Header
                 headerView
                 
+                // Mode Selection
+                modeSelectionView
+                
                 // Form
                 ScrollView {
                     VStack(spacing: 20) {
-                        serviceSelectionSection
-                        dependsOnServiceSelectionSection
-                        dependencyTypeSection
-                        descriptionSection
+                        switch createMode {
+                        case .dependency:
+                            dependencyFormSection
+                        case .serviceDependency:
+                            serviceDependencyFormSection
+                        }
                     }
                     .padding()
                 }
@@ -43,205 +66,283 @@ struct CreateDependencyView: View {
                 // Buttons
                 buttonsView
             }
-            .frame(width: 500, height: 600)
+            .frame(width: 500, height: 700)
         }
     }
     
     // MARK: - Header View
     
     private var headerView: some View {
-        HStack {
-            Text("Добавить зависимость")
-                .font(.headline)
-            
-            Spacer()
-            
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Добавить зависимость")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                
+                Spacer()
+                
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .padding(8)
+                        .background(Color(.systemGray5))
+                        .clipShape(Circle())
+                }
             }
-            .buttonStyle(.plain)
         }
-        .padding()
-        .background(Color(NSColor.controlBackgroundColor))
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 16)
+        .background(Color(.systemGray6))
     }
     
-    // MARK: - Service Selection Section
+    // MARK: - Mode Selection
     
-    private var serviceSelectionSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Сервис")
+    private var modeSelectionView: some View {
+        Picker("Режим", selection: $createMode) {
+            ForEach(CreateMode.allCases, id: \.self) { mode in
+                Text(mode.rawValue).tag(mode)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 16)
+        .background(Color(.systemBackground))
+    }
+    
+    // MARK: - Dependency Form
+    
+    private var dependencyFormSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Создать новую зависимость")
                 .font(.headline)
             
-            Menu {
-                ForEach(dependencyViewModel.services) { service in
-                    Button(service.name) {
-                        selectedServiceId = service.serviceId
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Название")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                TextField("Например: postgresql, jwt-library", text: $dependencyName)
+                    .textFieldStyle(.roundedBorder)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Версия")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                TextField("Например: 14.5, 3.2.1", text: $dependencyVersion)
+                    .textFieldStyle(.roundedBorder)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Тип зависимости")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                Picker("Тип", selection: $dependencyType) {
+                    ForEach(DependencyType.allCases, id: \.self) { type in
+                        HStack {
+                            Image(systemName: type.icon)
+                            Text(type.displayName)
+                        }.tag(type)
                     }
                 }
-            } label: {
-                HStack {
-                    Text(selectedServiceName)
-                        .foregroundColor(selectedServiceId == nil ? .secondary : .primary)
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .foregroundColor(.secondary)
-                }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                )
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .menuStyle(.borderlessButton)
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Описание")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                TextField("Описание зависимости...", text: $dependencyDescription, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(3...6)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Конфигурация")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                VStack(spacing: 8) {
+                    ForEach(Array(dependencyConfig.keys.sorted()), id: \.self) { key in
+                        HStack {
+                            TextField("Ключ", text: .constant(key))
+                                .textFieldStyle(.roundedBorder)
+                                .disabled(true)
+                            
+                            TextField("Значение", text: Binding(
+                                get: { dependencyConfig[key] ?? "" },
+                                set: { dependencyConfig[key] = $0 }
+                            ))
+                            .textFieldStyle(.roundedBorder)
+                            
+                            Button(action: {
+                                dependencyConfig.removeValue(forKey: key)
+                            }) {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundColor(.red)
+                            }
+                        }
+                    }
+                    
+                    Button("Добавить параметр") {
+                        dependencyConfig["new_key"] = ""
+                    }
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                }
+            }
         }
     }
     
-    // MARK: - Depends On Service Selection Section
+    // MARK: - Service Dependency Form
     
-    private var dependsOnServiceSelectionSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Зависит от сервиса")
+    private var serviceDependencyFormSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Добавить зависимость к сервису")
                 .font(.headline)
             
-            Menu {
-                ForEach(availableDependsOnServices) { service in
-                    Button(service.name) {
-                        selectedDependsOnServiceId = service.serviceId
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Сервис")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                Picker("Выберите сервис", selection: $selectedServiceId) {
+                    Text("Выберите сервис").tag(nil as UUID?)
+                    ForEach(dependencyViewModel.services, id: \.serviceId) { service in
+                        Text(service.name).tag(service.serviceId as UUID?)
                     }
                 }
-            } label: {
-                HStack {
-                    Text(selectedDependsOnServiceName)
-                        .foregroundColor(selectedDependsOnServiceId == nil ? .secondary : .primary)
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .foregroundColor(.secondary)
-                }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                )
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .menuStyle(.borderlessButton)
-            .disabled(selectedServiceId == nil)
-        }
-    }
-    
-    // MARK: - Dependency Type Section
-    
-    private var dependencyTypeSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Тип зависимости")
-                .font(.headline)
             
-            Menu {
-                ForEach(DependencyType.allCases, id: \.self) { type in
-                    Button(type.displayName) {
-                        selectedDependencyType = type
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Зависимость")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                Picker("Выберите зависимость", selection: $selectedDependencyId) {
+                    Text("Выберите зависимость").tag(nil as UUID?)
+                    ForEach(dependencyViewModel.dependencies, id: \.dependencyId) { dependency in
+                        HStack {
+                            Image(systemName: dependency.dependencyType.icon)
+                            Text("\(dependency.name) v\(dependency.version)")
+                        }.tag(dependency.dependencyId as UUID?)
                     }
                 }
-            } label: {
-                HStack {
-                    Text(selectedDependencyType.displayName)
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .foregroundColor(.secondary)
-                }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                )
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .menuStyle(.borderlessButton)
-        }
-    }
-    
-    // MARK: - Description Section
-    
-    private var descriptionSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Описание")
-                .font(.headline)
             
-            TextEditor(text: $description)
-                .frame(height: 100)
-                .padding(8)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                )
-                .font(.body)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Окружение")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                TextField("prod, dev, staging", text: $environmentCode)
+                    .textFieldStyle(.roundedBorder)
+            }
+            
+            if let selectedDependencyId = selectedDependencyId,
+               let dependency = dependencyViewModel.dependencies.first(where: { $0.dependencyId == selectedDependencyId }) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Информация о зависимости")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Image(systemName: dependency.dependencyType.icon)
+                                .foregroundColor(.blue)
+                            Text(dependency.dependencyType.displayName)
+                                .font(.caption)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.blue.opacity(0.1))
+                                .cornerRadius(4)
+                        }
+                        
+                        if let description = dependency.description {
+                            Text(description)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        if !dependency.config.isEmpty {
+                            Text("Конфигурация: \(dependency.config.keys.joined(separator: ", "))")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(12)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                }
+            }
         }
     }
     
     // MARK: - Buttons View
     
     private var buttonsView: some View {
-        HStack {
+        HStack(spacing: 12) {
             Button("Отмена") {
                 dismiss()
             }
             .buttonStyle(.bordered)
+            .frame(maxWidth: .infinity)
             
-            Spacer()
-            
-            Button("Добавить") {
+            Button(createMode == .dependency ? "Создать" : "Добавить") {
                 Task {
                     await createDependency()
                 }
             }
             .buttonStyle(.borderedProminent)
+            .frame(maxWidth: .infinity)
             .disabled(!isFormValid || isCreating)
         }
-        .padding()
-        .background(Color(NSColor.controlBackgroundColor))
-    }
-    
-    // MARK: - Computed Properties
-    
-    private var selectedServiceName: String {
-        guard let selectedServiceId = selectedServiceId else {
-            return "Выберите сервис"
-        }
-        return dependencyViewModel.services.first { $0.serviceId == selectedServiceId }?.name ?? "Выберите сервис"
-    }
-    
-    private var selectedDependsOnServiceName: String {
-        guard let selectedDependsOnServiceId = selectedDependsOnServiceId else {
-            return "Выберите зависимый сервис"
-        }
-        return dependencyViewModel.services.first { $0.serviceId == selectedDependsOnServiceId }?.name ?? "Выберите зависимый сервис"
-    }
-    
-    private var availableDependsOnServices: [ServiceResponse] {
-        dependencyViewModel.services.filter { service in
-            service.serviceId != selectedServiceId
-        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .background(Color(.systemGray6))
     }
     
     // MARK: - Actions
     
     private func createDependency() async {
-        guard let serviceId = selectedServiceId,
-              let dependsOnServiceId = selectedDependsOnServiceId else {
-            return
-        }
-        
         isCreating = true
         
-        let request = CreateDependencyRequest(
-            serviceId: serviceId,
-            dependsOnServiceId: dependsOnServiceId,
-            dependencyType: selectedDependencyType,
-            description: description.isEmpty ? nil : description
-        )
+        let success: Bool
         
-        let success = await dependencyViewModel.createDependency(request)
+        switch createMode {
+        case .dependency:
+            let request = CreateDependencyRequest(
+                name: dependencyName,
+                description: dependencyDescription.isEmpty ? nil : dependencyDescription,
+                version: dependencyVersion,
+                dependencyType: dependencyType,
+                config: dependencyConfig
+            )
+            success = await dependencyViewModel.createDependency(request)
+            
+        case .serviceDependency:
+            guard let serviceId = selectedServiceId,
+                  let dependencyId = selectedDependencyId else {
+                isCreating = false
+                return
+            }
+            
+            success = await dependencyViewModel.createServiceDependency(
+                serviceId: serviceId,
+                dependencyId: dependencyId,
+                environmentCode: environmentCode.isEmpty ? nil : environmentCode
+            )
+        }
         
         isCreating = false
         
@@ -252,6 +353,5 @@ struct CreateDependencyView: View {
 }
 
 #Preview {
-    CreateDependencyView()
-        .environmentObject(DependencyViewModel())
+    CreateDependencyView(dependencyViewModel: DependencyViewModel())
 }

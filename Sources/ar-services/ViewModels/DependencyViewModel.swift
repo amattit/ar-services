@@ -11,8 +11,12 @@ import SwiftUI
 @MainActor
 class DependencyViewModel: ObservableObject {
     @Published var dependencies: [DependencyResponse] = []
+    @Published var serviceDependencies: [ServiceDependencyResponse] = []
+    @Published var filteredServiceDependencies: [ServiceDependencyResponse] = []
     @Published var services: [ServiceResponse] = []
-    @Published var dependencyGraph: DependencyGraph?
+    @Published var dependencyGraph: ServiceDependencyGraphResponse?
+    @Published var searchText = ""
+    @Published var selectedDependencyType: DependencyType?
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -25,7 +29,15 @@ class DependencyViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            dependencies = try await apiService.fetchDependencies()
+            async let dependenciesTask = apiService.fetchDependencies()
+            async let servicesTask = apiService.fetchServices()
+            
+            dependencies = try await dependenciesTask
+            services = try await servicesTask
+            
+            // Load all service dependencies
+            await loadAllServiceDependencies()
+            
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -33,103 +45,168 @@ class DependencyViewModel: ObservableObject {
         isLoading = false
     }
     
-    func loadServices() async {
-        do {
-            services = try await apiService.fetchServices()
-        } catch {
-            errorMessage = error.localizedDescription
+    private func loadAllServiceDependencies() async {
+        var allServiceDependencies: [ServiceDependencyResponse] = []
+        
+        for service in services {
+            do {
+                let serviceDeps = try await apiService.fetchServiceDependencies(serviceId: service.serviceId)
+                allServiceDependencies.append(contentsOf: serviceDeps)
+            } catch {
+                print("Failed to load dependencies for service \(service.name): \(error)")
+            }
         }
+        
+        serviceDependencies = allServiceDependencies
+        applyFilters()
     }
     
     func createDependency(_ request: CreateDependencyRequest) async -> Bool {
+        isLoading = true
+        errorMessage = nil
+        
         do {
             let newDependency = try await apiService.createDependency(request)
             dependencies.append(newDependency)
+            isLoading = false
             return true
         } catch {
             errorMessage = error.localizedDescription
+            isLoading = false
+            return false
+        }
+    }
+    
+    func createServiceDependency(serviceId: UUID, dependencyId: UUID, environmentCode: String? = nil) async -> Bool {
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            let request = CreateServiceDependencyRequest(
+                dependencyId: dependencyId,
+                environmentCode: environmentCode,
+                configOverride: [:]
+            )
+            let newServiceDependency = try await apiService.createServiceDependency(serviceId: serviceId, request: request)
+            serviceDependencies.append(newServiceDependency)
+            applyFilters()
+            isLoading = false
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            isLoading = false
             return false
         }
     }
     
     func deleteDependency(_ dependency: DependencyResponse) async -> Bool {
+        isLoading = true
+        errorMessage = nil
+        
         do {
             try await apiService.deleteDependency(id: dependency.dependencyId)
             dependencies.removeAll { $0.dependencyId == dependency.dependencyId }
+            serviceDependencies.removeAll { $0.dependency.dependencyId == dependency.dependencyId }
+            applyFilters()
+            isLoading = false
             return true
         } catch {
             errorMessage = error.localizedDescription
+            isLoading = false
             return false
         }
     }
     
-    func updateDependency(id: UUID, request: UpdateDependencyRequest) async -> Bool {
+    func deleteServiceDependency(_ serviceDependency: ServiceDependencyResponse) async -> Bool {
+        isLoading = true
+        errorMessage = nil
+        
         do {
-            let updatedDependency = try await apiService.updateDependency(id: id, request: request)
-            if let index = dependencies.firstIndex(where: { $0.dependencyId == id }) {
-                dependencies[index] = updatedDependency
-            }
+            try await apiService.deleteServiceDependency(
+                serviceId: serviceDependency.serviceId,
+                dependencyId: serviceDependency.dependency.dependencyId,
+                environmentCode: serviceDependency.environmentCode
+            )
+            serviceDependencies.removeAll { $0.serviceDependencyId == serviceDependency.serviceDependencyId }
+            applyFilters()
+            isLoading = false
             return true
         } catch {
             errorMessage = error.localizedDescription
+            isLoading = false
             return false
         }
     }
-    
-    // MARK: - Graph Management
     
     func loadDependencyGraph() async {
+        isLoading = true
+        errorMessage = nil
+        
         do {
             dependencyGraph = try await apiService.fetchDependencyGraph()
         } catch {
             errorMessage = error.localizedDescription
         }
-    }
-    
-    // MARK: - Helper Methods
-    
-    func serviceName(for serviceId: UUID) -> String {
-        services.first { $0.serviceId == serviceId }?.name ?? "Неизвестный сервис"
-    }
-    
-    func serviceVersion(for serviceId: UUID) -> String {
-        // В будущем можно добавить версионирование
-        services.first { $0.serviceId == serviceId }?.environments?.first?.displayName ?? ""
-    }
-    
-    func groupedDependencies() -> [String: [DependencyResponse]] {
-        Dictionary(grouping: dependencies) { dependency in
-            dependency.serviceName ?? serviceName(for: dependency.serviceId)
-        }
-    }
-    
-    func filteredDependencies(searchText: String, selectedType: DependencyType?) -> [DependencyResponse] {
-        var filtered = dependencies
         
-        // Фильтрация по типу
-        if let selectedType = selectedType {
-            filtered = filtered.filter { $0.dependencyType == selectedType }
-        }
+        isLoading = false
+    }
+    
+    // MARK: - Filtering and Search
+    
+    func applyFilters() {
+        var filtered = serviceDependencies
         
-        // Фильтрация по поисковому запросу
+        // Apply search filter
         if !searchText.isEmpty {
-            filtered = filtered.filter { dependency in
-                let serviceName = dependency.serviceName ?? serviceName(for: dependency.serviceId)
-                let dependsOnServiceName = dependency.dependsOnServiceName ?? serviceName(for: dependency.dependsOnServiceId)
-                let description = dependency.description ?? ""
+            filtered = filtered.filter { serviceDep in
+                let serviceName = services.first { $0.serviceId == serviceDep.serviceId }?.name ?? ""
+                let dependencyName = serviceDep.dependency.name
+                let description = serviceDep.dependency.description ?? ""
                 
                 return serviceName.localizedCaseInsensitiveContains(searchText) ||
-                       dependsOnServiceName.localizedCaseInsensitiveContains(searchText) ||
+                       dependencyName.localizedCaseInsensitiveContains(searchText) ||
                        description.localizedCaseInsensitiveContains(searchText)
             }
         }
         
-        return filtered
+        // Apply type filter
+        if let selectedType = selectedDependencyType {
+            filtered = filtered.filter { $0.dependency.dependencyType == selectedType }
+        }
+        
+        filteredServiceDependencies = filtered
     }
     
-    func dependencyStats() -> (total: Int, services: Int) {
-        let total = dependencies.count
-        let uniqueServices = Set(dependencies.map { $0.serviceId }).count
-        return (total: total, services: uniqueServices)
+    func updateSearchText(_ text: String) {
+        searchText = text
+        applyFilters()
+    }
+    
+    func updateDependencyTypeFilter(_ type: DependencyType?) {
+        selectedDependencyType = type
+        applyFilters()
+    }
+    
+    // MARK: - Computed Properties
+    
+    var groupedServiceDependencies: [String: [ServiceDependencyResponse]] {
+        let grouped = Dictionary(grouping: filteredServiceDependencies) { serviceDep in
+            services.first { $0.serviceId == serviceDep.serviceId }?.name ?? "Unknown Service"
+        }
+        return grouped
+    }
+    
+    var dependencyStats: (total: Int, services: Int) {
+        let totalDependencies = filteredServiceDependencies.count
+        let uniqueServices = Set(filteredServiceDependencies.map { $0.serviceId }).count
+        return (total: totalDependencies, services: uniqueServices)
+    }
+    
+    func serviceName(for serviceId: UUID) -> String {
+        services.first { $0.serviceId == serviceId }?.name ?? "Unknown Service"
+    }
+    
+    func serviceVersion(for serviceId: UUID) -> String {
+        services.first { $0.serviceId == serviceId }?.version ?? "Unknown"
     }
 }

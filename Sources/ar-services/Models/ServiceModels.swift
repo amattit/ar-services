@@ -114,87 +114,193 @@ struct DashboardStats {
 
 struct DependencyResponse: Decodable, Identifiable {
     let dependencyId: UUID
-    let serviceId: UUID
-    let dependsOnServiceId: UUID
-    let dependencyType: DependencyType
+    let name: String
     let description: String?
+    let version: String
+    let dependencyType: DependencyType
+    let config: [String: String]
     let createdAt: Date?
     let updatedAt: Date?
-    
-    // Дополнительные поля для отображения
-    let serviceName: String?
-    let dependsOnServiceName: String?
-    let serviceVersion: String?
-    let dependsOnServiceVersion: String?
     
     var id: UUID { dependencyId }
 }
 
 struct CreateDependencyRequest: Encodable {
-    let serviceId: UUID
-    let dependsOnServiceId: UUID
-    let dependencyType: DependencyType
+    let name: String
     let description: String?
+    let version: String
+    let dependencyType: DependencyType
+    let config: [String: String]
 }
 
 struct UpdateDependencyRequest: Encodable {
-    let dependencyType: DependencyType?
+    let name: String?
     let description: String?
+    let version: String?
+    let dependencyType: DependencyType?
+    let config: [String: String]?
+}
+
+struct ServiceDependencyResponse: Decodable, Identifiable {
+    let serviceDependencyId: UUID
+    let serviceId: UUID
+    let dependency: DependencyResponse
+    let environmentCode: String?
+    let configOverride: [String: String]
+    let createdAt: Date?
+    let updatedAt: Date?
+    
+    var id: UUID { serviceDependencyId }
+}
+
+struct CreateServiceDependencyRequest: Encodable {
+    let dependencyId: UUID
+    let environmentCode: String?
+    let configOverride: [String: String]
 }
 
 enum DependencyType: String, Codable, CaseIterable {
-    case SYNCHRONOUS = "SYNCHRONOUS"
-    case ASYNCHRONOUS = "ASYNCHRONOUS"
+    case LIBRARY = "LIBRARY"
+    case SERVICE = "SERVICE"
     case DATABASE = "DATABASE"
+    case EXTERNAL_API = "EXTERNAL_API"
+    case MESSAGE_QUEUE = "MESSAGE_QUEUE"
     
     var displayName: String {
         switch self {
-        case .SYNCHRONOUS:
-            return "Синхронная"
-        case .ASYNCHRONOUS:
-            return "Асинхронная"
+        case .LIBRARY:
+            return "Библиотека"
+        case .SERVICE:
+            return "Сервис"
         case .DATABASE:
             return "База данных"
+        case .EXTERNAL_API:
+            return "Внешний API"
+        case .MESSAGE_QUEUE:
+            return "Очередь сообщений"
         }
     }
     
     var description: String {
         switch self {
-        case .SYNCHRONOUS:
-            return "прямые HTTP вызовы между сервисами"
-        case .ASYNCHRONOUS:
-            return "взаимодействие через очереди сообщений"
+        case .LIBRARY:
+            return "программная библиотека или пакет"
+        case .SERVICE:
+            return "другой микросервис в системе"
         case .DATABASE:
-            return "общие базы данных между сервисами"
+            return "база данных или хранилище"
+        case .EXTERNAL_API:
+            return "внешний API или веб-сервис"
+        case .MESSAGE_QUEUE:
+            return "система очередей сообщений"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .LIBRARY:
+            return "books.vertical"
+        case .SERVICE:
+            return "cube"
+        case .DATABASE:
+            return "cylinder"
+        case .EXTERNAL_API:
+            return "network"
+        case .MESSAGE_QUEUE:
+            return "tray.2"
         }
     }
 }
 
 // MARK: - Dependency Graph Models
 
-struct DependencyGraph {
+struct ServiceDependencyGraphResponse: Decodable {
     let nodes: [DependencyNode]
     let edges: [DependencyEdge]
+    let metadata: [String: AnyCodable]
 }
 
-struct DependencyNode: Identifiable {
-    let id: UUID
+struct DependencyNode: Decodable, Identifiable {
+    let id: String
     let name: String
-    let serviceType: ServiceType
-    let dependencyCount: Int
-    let dependentCount: Int
+    let type: String
+    let serviceType: String?
+    let metadata: [String: AnyCodable]
+    
+    var uuid: UUID {
+        UUID(uuidString: id) ?? UUID()
+    }
     
     var displayName: String { name }
 }
 
-struct DependencyEdge: Identifiable {
-    let id: UUID
-    let fromNodeId: UUID
-    let toNodeId: UUID
-    let dependencyType: DependencyType
-    let description: String?
+struct DependencyEdge: Decodable, Identifiable {
+    let from: String
+    let to: String
+    let type: String
+    let metadata: [String: AnyCodable]
     
-    var displayLabel: String {
-        dependencyType.displayName
+    var id: String { "\(from)-\(to)" }
+    
+    var fromUUID: UUID {
+        UUID(uuidString: from) ?? UUID()
+    }
+    
+    var toUUID: UUID {
+        UUID(uuidString: to) ?? UUID()
+    }
+}
+
+struct AnyCodable: Codable {
+    let value: Any
+    
+    init<T>(_ value: T?) {
+        self.value = value ?? ()
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        
+        if container.decodeNil() {
+            self.value = ()
+        } else if let bool = try? container.decode(Bool.self) {
+            self.value = bool
+        } else if let int = try? container.decode(Int.self) {
+            self.value = int
+        } else if let double = try? container.decode(Double.self) {
+            self.value = double
+        } else if let string = try? container.decode(String.self) {
+            self.value = string
+        } else if let array = try? container.decode([AnyCodable].self) {
+            self.value = array.map { $0.value }
+        } else if let dictionary = try? container.decode([String: AnyCodable].self) {
+            self.value = dictionary.mapValues { $0.value }
+        } else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "AnyCodable value cannot be decoded")
+        }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        
+        switch value {
+        case is Void:
+            try container.encodeNil()
+        case let bool as Bool:
+            try container.encode(bool)
+        case let int as Int:
+            try container.encode(int)
+        case let double as Double:
+            try container.encode(double)
+        case let string as String:
+            try container.encode(string)
+        case let array as [Any]:
+            try container.encode(array.map { AnyCodable($0) })
+        case let dictionary as [String: Any]:
+            try container.encode(dictionary.mapValues { AnyCodable($0) })
+        default:
+            let context = EncodingError.Context(codingPath: container.codingPath, debugDescription: "AnyCodable value cannot be encoded")
+            throw EncodingError.invalidValue(value, context)
+        }
     }
 }

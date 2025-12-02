@@ -167,7 +167,7 @@ private let baseURL = "http://localhost:8080/api/v1"
         return try decoder.decode([DependencyResponse].self, from: data)
     }
     
-    func fetchServiceDependencies(serviceId: UUID) async throws -> [DependencyResponse] {
+    func fetchServiceDependencies(serviceId: UUID) async throws -> [ServiceDependencyResponse] {
         let url = URL(string: "\(baseURL)/services/\(serviceId)/dependencies")!
         let (data, response) = try await session.data(from: url)
         
@@ -176,7 +176,7 @@ private let baseURL = "http://localhost:8080/api/v1"
             throw APIError.invalidResponse
         }
         
-        return try decoder.decode([DependencyResponse].self, from: data)
+        return try decoder.decode([ServiceDependencyResponse].self, from: data)
     }
     
     func createDependency(_ request: CreateDependencyRequest) async throws -> DependencyResponse {
@@ -195,6 +195,31 @@ private let baseURL = "http://localhost:8080/api/v1"
         switch httpResponse.statusCode {
         case 200, 201:
             return try decoder.decode(DependencyResponse.self, from: data)
+        case 409:
+            throw APIError.dependencyAlreadyExists
+        case 400:
+            throw APIError.validationError
+        default:
+            throw APIError.serverError
+        }
+    }
+    
+    func createServiceDependency(serviceId: UUID, request: CreateServiceDependencyRequest) async throws -> ServiceDependencyResponse {
+        let url = URL(string: "\(baseURL)/services/\(serviceId)/dependencies")!
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.httpBody = try encoder.encode(request)
+        
+        let (data, response) = try await session.data(for: urlRequest)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        switch httpResponse.statusCode {
+        case 200, 201:
+            return try decoder.decode(ServiceDependencyResponse.self, from: data)
         case 409:
             throw APIError.dependencyAlreadyExists
         case 400:
@@ -250,8 +275,36 @@ private let baseURL = "http://localhost:8080/api/v1"
         }
     }
     
-    func fetchDependencyGraph() async throws -> DependencyGraph {
-        let url = URL(string: "\(baseURL)/dependencies/graph")!
+    func deleteServiceDependency(serviceId: UUID, dependencyId: UUID, environmentCode: String?) async throws {
+        var url = URL(string: "\(baseURL)/services/\(serviceId)/dependencies/\(dependencyId)")!
+        
+        if let environmentCode = environmentCode {
+            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+            components.queryItems = [URLQueryItem(name: "environmentCode", value: environmentCode)]
+            url = components.url!
+        }
+        
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "DELETE"
+        
+        let (_, response) = try await session.data(for: urlRequest)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        switch httpResponse.statusCode {
+        case 204:
+            return
+        case 404:
+            throw APIError.dependencyNotFound
+        default:
+            throw APIError.serverError
+        }
+    }
+    
+    func fetchDependencyGraph() async throws -> ServiceDependencyGraphResponse {
+        let url = URL(string: "\(baseURL)/dependency-graph/services")!
         let (data, response) = try await session.data(from: url)
         
         guard let httpResponse = response as? HTTPURLResponse,
@@ -259,7 +312,7 @@ private let baseURL = "http://localhost:8080/api/v1"
             throw APIError.invalidResponse
         }
         
-        return try decoder.decode(DependencyGraph.self, from: data)
+        return try decoder.decode(ServiceDependencyGraphResponse.self, from: data)
     }
 }
 
