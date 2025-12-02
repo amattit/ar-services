@@ -14,105 +14,38 @@ struct EditServiceView: View {
     @StateObject private var formData = CreateServiceFormData()
     @State private var isUpdating = false
     @State private var showingDeleteConfirmation = false
+    @State private var selectedTab = 0
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    // Header
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Редактирование сервиса")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                        Text("Обновите информацию о сервисе \(service.name)")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+            VStack(spacing: 0) {
+                // Service Info Header
+                ServiceInfoCard(service: service)
+                    .padding()
+                
+                Divider()
+                
+                // Tab View
+                TabView(selection: $selectedTab) {
+                    // Service Settings Tab
+                    ServiceSettingsTab(
+                        service: service,
+                        formData: formData,
+                        isUpdating: $isUpdating,
+                        showingDeleteConfirmation: $showingDeleteConfirmation
+                    )
+                    .tabItem {
+                        Label("Настройки", systemImage: "gear")
                     }
+                    .tag(0)
                     
-                    // Service Info Card
-                    ServiceInfoCard(service: service)
-                    
-                    // Form
-                    VStack(alignment: .leading, spacing: 20) {
-                        // Service Name
-                        FormField(
-                            title: "Название сервиса",
-                            isRequired: true,
-                            description: "Уникальное название для идентификации сервиса"
-                        ) {
-                            TextField("Например: user-service", text: $formData.name)
-                                .textFieldStyle(.roundedBorder)
+                    // Endpoints Tab
+                    EndpointsView(service: service)
+                        .tabItem {
+                            Label("Endpoints", systemImage: "list.bullet.rectangle")
                         }
-                        
-                        // Description
-                        FormField(
-                            title: "Описание",
-                            description: "Опишите основную функциональность и назначение сервиса"
-                        ) {
-                            TextEditor(text: $formData.description)
-                                .frame(minHeight: 80)
-                                .padding(8)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                                )
-                        }
-                        
-                        // Owner
-                        FormField(
-                            title: "Владелец",
-                            isRequired: true,
-                            description: "Команда или разработчик, ответственный за сервис"
-                        ) {
-                            TextField("Например: backend-team", text: $formData.owner)
-                                .textFieldStyle(.roundedBorder)
-                        }
-                        
-                        // Tags
-                        FormField(
-                            title: "Теги",
-                            description: "Добавьте теги для категоризации сервиса (например: users, authentication, api)"
-                        ) {
-                            TextField("Добавить тег...", text: $formData.tags)
-                                .textFieldStyle(.roundedBorder)
-                            
-                            if !formData.tagsArray.isEmpty {
-                                TagsView(tags: formData.tagsArray)
-                            }
-                        }
-                        
-                        // Service Type
-                        FormField(
-                            title: "Тип сервиса",
-                            isRequired: true,
-                            description: "Выберите тип сервиса для правильной категоризации"
-                        ) {
-                            Picker("Тип сервиса", selection: $formData.serviceType) {
-                                ForEach(ServiceType.allCases, id: \.self) { type in
-                                    Text(type.displayName).tag(type)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                        }
-                        
-                        // Options
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Дополнительные опции")
-                                .font(.headline)
-                            
-                            Toggle("Поддерживает базу данных", isOn: $formData.supportsDatabase)
-                            Toggle("Использует прокси", isOn: $formData.proxy)
-                        }
-                    }
-                    
-                    // Danger Zone
-                    DangerZoneView {
-                        showingDeleteConfirmation = true
-                    }
-                    
-                    Spacer()
+                        .tag(1)
                 }
-                .padding()
             }
             .navigationTitle("Редактирование сервиса")
 //            .navigationBarTitleDisplayMode(.inline)
@@ -336,6 +269,149 @@ struct DangerZoneView: View {
                         .stroke(Color.red.opacity(0.3), lineWidth: 1)
                 )
         )
+    }
+}
+
+// MARK: - Service Settings Tab
+
+struct ServiceSettingsTab: View {
+    let service: ServiceResponse
+    @ObservedObject var formData: CreateServiceFormData
+    @Binding var isUpdating: Bool
+    @Binding var showingDeleteConfirmation: Bool
+    @EnvironmentObject private var serviceViewModel: ServiceViewModel
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                // Header
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Настройки сервиса")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                    Text("Обновите информацию о сервисе \(service.name)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                
+                // Form
+                VStack(alignment: .leading, spacing: 20) {
+                    // Service Name
+                    FormField(
+                        title: "Название сервиса",
+                        isRequired: true,
+                        description: "Уникальное название для идентификации сервиса"
+                    ) {
+                        TextField("Например: user-service", text: $formData.name)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    
+                    // Description
+                    FormField(
+                        title: "Описание",
+                        description: "Опишите основную функциональность и назначение сервиса"
+                    ) {
+                        TextEditor(text: $formData.description)
+                            .frame(minHeight: 80)
+                            .padding(8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+                    }
+                    
+                    // Owner
+                    FormField(
+                        title: "Владелец",
+                        isRequired: true,
+                        description: "Команда или разработчик, ответственный за сервис"
+                    ) {
+                        TextField("Например: backend-team", text: $formData.owner)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    
+                    // Tags
+                    FormField(
+                        title: "Теги",
+                        description: "Добавьте теги для категоризации сервиса (например: users, authentication, api)"
+                    ) {
+                        TextField("Добавить тег...", text: $formData.tags)
+                            .textFieldStyle(.roundedBorder)
+                        
+                        if !formData.tagsArray.isEmpty {
+                            TagsView(tags: formData.tagsArray)
+                        }
+                    }
+                    
+                    // Service Type
+                    FormField(
+                        title: "Тип сервиса",
+                        isRequired: true,
+                        description: "Выберите тип сервиса для правильной категоризации"
+                    ) {
+                        Picker("Тип сервиса", selection: $formData.serviceType) {
+                            ForEach(ServiceType.allCases, id: \.self) { type in
+                                Text(type.displayName).tag(type)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                    
+                    // Options
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Дополнительные опции")
+                            .font(.headline)
+                        
+                        Toggle("Поддерживает базу данных", isOn: $formData.supportsDatabase)
+                        Toggle("Использует прокси", isOn: $formData.proxy)
+                    }
+                }
+                
+                // Action Buttons
+                HStack {
+                    Button("Сохранить изменения") {
+                        updateService()
+                    }
+                    .disabled(!formData.isValid || isUpdating)
+                    .buttonStyle(.borderedProminent)
+                    
+                    if isUpdating {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    }
+                }
+                
+                // Danger Zone
+                DangerZoneView {
+                    showingDeleteConfirmation = true
+                }
+                
+                Spacer()
+            }
+            .padding()
+        }
+        .onAppear {
+            formData.populate(from: service)
+        }
+    }
+    
+    private func updateService() {
+        isUpdating = true
+        
+        Task {
+            let success = await serviceViewModel.updateService(
+                id: service.serviceId,
+                request: formData.toUpdateRequest()
+            )
+            
+            await MainActor.run {
+                isUpdating = false
+                if success {
+                    dismiss()
+                }
+            }
+        }
     }
 }
 
