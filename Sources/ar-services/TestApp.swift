@@ -6,13 +6,13 @@
 //
 
 import SwiftUI
-
-@main
-struct TestApp: App {
-    var body: some Scene {
-        WindowGroup {
-            DependenciesView()
-                .frame(minWidth: 1200, minHeight: 800)
-        }
-    }
-}
+//
+//@main
+//struct TestApp: App {
+//    var body: some Scene {
+//        WindowGroup {
+//            DependenciesView()
+//                .frame(minWidth: 1200, minHeight: 800)
+//        }
+//    }
+//}

@@ -69,7 +69,6 @@ struct DependencyGraphView: View {
     
     @MainActor
     private func graphView(graph: ServiceDependencyGraphResponse) -> some View {
-    private func graphView(graph: ServiceDependencyGraphResponse) -> some View {
         GeometryReader { geometry in
             ZStack {
                 // Background
@@ -79,16 +78,16 @@ struct DependencyGraphView: View {
                 // Graph Content
                 ZStack {
                     // Edges (connections)
-                        if let fromNode = graph.nodes.first(where: { $0.id == edge.from }),
-                           let toNode = graph.nodes.first(where: { $0.id == edge.to }) {
-                           let toNode = graph.nodes.first(where: { $0.id == edge.to }) {
-                            EdgeView(
-                                from: nodePosition(for: fromNode, in: geometry.size),
-                                to: nodePosition(for: toNode, in: geometry.size),
-                                edge: edge
-                            )
-                        }
-                    }
+//                    if let fromNode = graph.nodes.first(where: { $0.id == edge.from }),
+//                       let toNode = graph.nodes.first(where: { $0.id == edge.to }) {
+//                        let edge = graph.edges.first(where: { $0.id == edge.to }) {
+//                            EdgeView(
+//                                from: nodePosition(for: fromNode, in: geometry.size),
+//                                to: nodePosition(for: toNode, in: geometry.size),
+//                                edge: edge
+//                            )
+//                        }
+//                    }
                     
                     // Nodes (services)
                     ForEach(graph.nodes) { node in
@@ -130,7 +129,6 @@ struct DependencyGraphView: View {
         }
     }
     
-    @MainActor
     @MainActor
     private var loadingOrEmptyView: some View {
         VStack(spacing: 16) {
@@ -335,7 +333,7 @@ struct EdgeView: View {
                 path.move(to: to)
                 path.addLine(to: arrowPoint2)
             }
-            .stroke(edgeColor, lineWidth: 2)
+                .stroke(edgeColor, lineWidth: 2)
         )
     }
     

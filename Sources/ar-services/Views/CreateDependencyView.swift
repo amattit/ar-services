@@ -302,7 +302,7 @@ struct CreateDependencyView: View {
     }
     
     // MARK: - Service-to-Service Form
-    
+    @MainActor
     private var serviceToServiceFormSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Создать связь между сервисами")

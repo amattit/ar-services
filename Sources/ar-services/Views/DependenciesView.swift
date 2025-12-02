@@ -545,11 +545,11 @@ struct ServiceToServiceDependencyRow: View {
             // Header with service names
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("От: \(dependencyViewModel.serviceName(for: dependency.consumerServiceId))")
+                    Text("От: \(dependencyViewModel.serviceName(for: dependency.consumerService.id))")
                         .font(.system(.subheadline, design: .monospaced))
                         .foregroundColor(.blue)
                     
-                    Text("К: \(dependencyViewModel.serviceName(for: dependency.providerServiceId))")
+                    Text("К: \(dependencyViewModel.serviceName(for: dependency.providerService.id))")
                         .font(.system(.subheadline, design: .monospaced))
                         .foregroundColor(.green)
                 }
@@ -629,8 +629,8 @@ struct ServiceToServiceDependencyRow: View {
             Button("Удалить", role: .destructive) {
                 Task {
                     await dependencyViewModel.deleteServiceToServiceDependency(
-                        serviceId: dependency.consumerServiceId,
-                        dependencyId: dependency.serviceDependencyId
+                        serviceId: dependency.consumerService.id,
+                        dependencyId: dependency.id
                     )
                 }
             }

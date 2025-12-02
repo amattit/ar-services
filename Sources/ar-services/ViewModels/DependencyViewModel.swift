@@ -20,7 +20,7 @@ class DependencyViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    private let apiService = MockAPIService.shared // Use MockAPIService for testing
+    private let apiService = APIService.shared // Use MockAPIService for testing
     
     // MARK: - Dependencies Management
     
@@ -245,7 +245,7 @@ class DependencyViewModel: ObservableObject {
     func deleteServiceToServiceDependency(serviceId: UUID, dependencyId: UUID) async -> Bool {
         do {
             try await apiService.deleteServiceToServiceDependency(serviceId: serviceId, dependencyId: dependencyId)
-            serviceToServiceDependencies.removeAll { $0.serviceDependencyId == dependencyId }
+            serviceToServiceDependencies.removeAll { $0.id == dependencyId }
             filterServiceToServiceDependencies()
             return true
         } catch {
@@ -256,8 +256,8 @@ class DependencyViewModel: ObservableObject {
     
     private func filterServiceToServiceDependencies() {
         filteredServiceToServiceDependencies = serviceToServiceDependencies.filter { dependency in
-            let consumerService = serviceName(for: dependency.consumerServiceId)
-            let providerService = serviceName(for: dependency.providerServiceId)
+            let consumerService = serviceName(for: dependency.consumerService.id)
+            let providerService = serviceName(for: dependency.providerService.id)
             let description = dependency.description ?? ""
             
             let matchesSearch = searchText.isEmpty ||
@@ -271,7 +271,7 @@ class DependencyViewModel: ObservableObject {
     
     var serviceToServiceStats: (total: Int, services: Int) {
         let totalDependencies = filteredServiceToServiceDependencies.count
-        let uniqueServices = Set(filteredServiceToServiceDependencies.flatMap { [$0.consumerServiceId, $0.providerServiceId] }).count
+        let uniqueServices = Set(filteredServiceToServiceDependencies.flatMap { [$0.consumerService.id, $0.providerService.id] }).count
         return (total: totalDependencies, services: uniqueServices)
     }
 }

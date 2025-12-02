@@ -162,18 +162,25 @@ struct CreateServiceDependencyRequest: Encodable {
 // MARK: - Service-to-Service Dependency Models
 
 struct ServiceToServiceDependencyResponse: Decodable, Identifiable {
-    let serviceDependencyId: UUID
-    let consumerServiceId: UUID
-    let providerServiceId: UUID
+    let id: UUID
+    let consumerService: ServiceSummary
+    let providerService: ServiceSummary
     let environmentCode: String?
     let description: String?
     let dependencyType: ServiceDependencyType
     let config: [String: String]
     let createdAt: Date?
     let updatedAt: Date?
-    
-    var id: UUID { serviceDependencyId }
 }
+
+struct ServiceSummary: Decodable {
+    let id: UUID
+    let name: String
+    let description: String?
+    let serviceType: ServiceType
+    let owner: String
+}
+
 
 struct CreateServiceToServiceDependencyRequest: Encodable {
     let providerServiceId: UUID
