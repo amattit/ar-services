@@ -14,7 +14,7 @@ struct DependenciesView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
+            ScrollView {
                 // Header
                 headerView
                 
@@ -38,8 +38,8 @@ struct DependenciesView: View {
                 // Info Section
                 infoSectionView
             }
-            .navigationBarHidden(true)
-            .background(Color(.systemGroupedBackground))
+//            .navigationBarHidden(true)
+            .background(Color(.controlBackgroundColor))
             .task {
                 await dependencyViewModel.loadDependencies()
             }
@@ -108,7 +108,7 @@ struct DependenciesView: View {
         .padding(.horizontal, 20)
         .padding(.top, 20)
         .padding(.bottom, 16)
-        .background(Color(.systemBackground))
+        .background(Color(.windowBackgroundColor))
     }
     
     // MARK: - Search and Filter
@@ -135,7 +135,7 @@ struct DependenciesView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(.systemGray6))
+            .background(Color(.systemGray))
             .cornerRadius(8)
             
             Menu {
@@ -158,13 +158,13 @@ struct DependenciesView: View {
                 .foregroundColor(.primary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(Color(.systemGray6))
+                .background(Color(.systemGray))
                 .cornerRadius(8)
             }
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 16)
-        .background(Color(.systemBackground))
+        .background(Color(.windowBackgroundColor))
     }
     
     // MARK: - Stats
@@ -183,13 +183,13 @@ struct DependenciesView: View {
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 16)
-        .background(Color(.systemBackground))
+        .background(Color(.windowBackgroundColor))
     }
     
     // MARK: - Dependencies List
     
     private var dependenciesListView: some View {
-        ScrollView {
+//        ScrollView {
             LazyVStack(spacing: 16) {
                 ForEach(Array(dependencyViewModel.groupedServiceDependencies.keys.sorted()), id: \.self) { serviceName in
                     if let serviceDependencies = dependencyViewModel.groupedServiceDependencies[serviceName] {
@@ -203,7 +203,7 @@ struct DependenciesView: View {
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
-        }
+//        }
     }
     
     // MARK: - Empty State
@@ -344,7 +344,7 @@ struct ServiceDependencySection: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(Color(.systemGray6))
+                .background(Color(.systemGray))
                 
                 // Table Rows
                 ForEach(serviceDependencies) { serviceDependency in
@@ -354,15 +354,15 @@ struct ServiceDependencySection: View {
                     )
                 }
             }
-            .background(Color(.systemBackground))
+            .background(Color(.windowBackgroundColor))
             .cornerRadius(8)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color(.systemGray4), lineWidth: 1)
+                    .stroke(Color(.systemGray), lineWidth: 1)
             )
         }
         .padding(16)
-        .background(Color(.systemBackground))
+        .background(Color(.windowBackgroundColor))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
     }
@@ -422,7 +422,7 @@ struct ServiceDependencyRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color(.systemBackground))
+        .background(Color(.windowBackgroundColor))
         .alert("Удалить зависимость?", isPresented: $showingDeleteAlert) {
             Button("Отмена", role: .cancel) { }
             Button("Удалить", role: .destructive) {

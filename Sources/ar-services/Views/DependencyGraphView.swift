@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import CoreGraphics
 
 struct DependencyGraphView: View {
     let dependencyViewModel: DependencyViewModel
@@ -66,8 +67,8 @@ struct DependencyGraphView: View {
     }
     
     // MARK: - Graph View
-    
-    private func graphView(graph: DependencyGraph) -> some View {
+    @MainActor
+    private func graphView(graph: ServiceDependencyGraphResponse) -> some View {
         GeometryReader { geometry in
             ZStack {
                 // Background
@@ -78,8 +79,8 @@ struct DependencyGraphView: View {
                 ZStack {
                     // Edges (connections)
                     ForEach(graph.edges) { edge in
-                        if let fromNode = graph.nodes.first(where: { $0.id == edge.fromNodeId }),
-                           let toNode = graph.nodes.first(where: { $0.id == edge.toNodeId }) {
+                        if let fromNode = graph.nodes.first(where: { $0.id == edge.from }),
+                           let toNode = graph.nodes.first(where: { $0.id == edge.to }) {
                             EdgeView(
                                 from: nodePosition(for: fromNode, in: geometry.size),
                                 to: nodePosition(for: toNode, in: geometry.size),
@@ -129,7 +130,7 @@ struct DependencyGraphView: View {
     }
     
     // MARK: - Loading or Empty View
-    
+    @MainActor
     private var loadingOrEmptyView: some View {
         VStack(spacing: 16) {
             if dependencyViewModel.isLoading {
@@ -209,7 +210,7 @@ struct DependencyGraphView: View {
     }
     
     // MARK: - Helper Methods
-    
+    @MainActor
     private func nodePosition(for node: DependencyNode, in size: CGSize) -> CGPoint {
         // Простое размещение узлов по кругу
         let nodes = dependencyViewModel.dependencyGraph?.nodes ?? []
@@ -338,18 +339,11 @@ struct EdgeView: View {
     }
     
     private var edgeColor: Color {
-        switch edge.dependencyType {
-        case .SYNCHRONOUS:
-            return .blue
-        case .ASYNCHRONOUS:
-            return .orange
-        case .DATABASE:
-            return .purple
-        }
+        .blue
     }
 }
 
 #Preview {
-    DependencyGraphView()
+    DependencyGraphView(dependencyViewModel: DependencyViewModel())
         .environmentObject(DependencyViewModel())
 }

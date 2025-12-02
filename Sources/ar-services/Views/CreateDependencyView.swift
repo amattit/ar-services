@@ -86,7 +86,7 @@ struct CreateDependencyView: View {
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.secondary)
                         .padding(8)
-                        .background(Color(.systemGray5))
+                        .background(Color(.systemGray))
                         .clipShape(Circle())
                 }
             }
@@ -94,7 +94,7 @@ struct CreateDependencyView: View {
         .padding(.horizontal, 20)
         .padding(.top, 20)
         .padding(.bottom, 16)
-        .background(Color(.systemGray6))
+        .background(Color(.systemGray))
     }
     
     // MARK: - Mode Selection
@@ -108,7 +108,7 @@ struct CreateDependencyView: View {
         .pickerStyle(.segmented)
         .padding(.horizontal, 20)
         .padding(.bottom, 16)
-        .background(Color(.systemBackground))
+        .background(Color(.controlBackgroundColor))
     }
     
     // MARK: - Dependency Form
@@ -201,7 +201,7 @@ struct CreateDependencyView: View {
     }
     
     // MARK: - Service Dependency Form
-    
+    @MainActor
     private var serviceDependencyFormSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Добавить зависимость к сервису")
@@ -281,7 +281,7 @@ struct CreateDependencyView: View {
                         }
                     }
                     .padding(12)
-                    .background(Color(.systemGray6))
+                    .background(Color(.systemGray))
                     .cornerRadius(8)
                 }
             }
@@ -309,7 +309,7 @@ struct CreateDependencyView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
-        .background(Color(.systemGray6))
+        .background(Color(.systemGray))
     }
     
     // MARK: - Actions

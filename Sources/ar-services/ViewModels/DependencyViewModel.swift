@@ -20,7 +20,7 @@ class DependencyViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    private let apiService = MockAPIService.shared // Use MockAPIService for testing
+    private let apiService = APIService.shared//MockAPIService.shared // Use MockAPIService for testing
     
     // MARK: - Dependencies Management
     
@@ -204,9 +204,5 @@ class DependencyViewModel: ObservableObject {
     
     func serviceName(for serviceId: UUID) -> String {
         services.first { $0.serviceId == serviceId }?.name ?? "Unknown Service"
-    }
-    
-    func serviceVersion(for serviceId: UUID) -> String {
-        services.first { $0.serviceId == serviceId }?.version ?? "Unknown"
     }
 }

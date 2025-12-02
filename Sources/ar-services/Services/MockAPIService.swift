@@ -102,7 +102,7 @@ class MockAPIService: ObservableObject {
         
         // Also remove related dependencies
         mockDependencies.removeAll { dependency in
-            dependency.serviceId == id || dependency.dependsOnServiceId == id
+            dependency.id == id || dependency.dependencyId == id
         }
     }
     
