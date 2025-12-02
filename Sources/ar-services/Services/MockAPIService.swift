@@ -16,6 +16,7 @@ class MockAPIService: ObservableObject {
     private var mockServices: [ServiceResponse] = []
     private var mockDependencies: [DependencyResponse] = []
     private var mockServiceDependencies: [ServiceDependencyResponse] = []
+    private var mockServiceToServiceDependencies: [ServiceToServiceDependencyResponse] = []
     
     private init() {
         setupMockData()
@@ -540,5 +541,184 @@ class MockAPIService: ObservableObject {
             userServiceJWT, userServiceDB, authServiceJWT, authServiceRedis,
             orderServiceDB, orderServiceQueue, paymentServiceStripe, paymentServiceDB
         ]
+        
+        // Service-to-Service Dependencies
+        let orderToUserAPI = ServiceToServiceDependencyResponse(
+            serviceDependencyId: UUID(),
+            consumerServiceId: orderService.serviceId,
+            providerServiceId: userService.serviceId,
+            environmentCode: "prod",
+            description: "Получение информации о пользователе для заказов",
+            dependencyType: .API_CALL,
+            config: [
+                "endpoint": "/api/v1/users",
+                "timeout": "5s",
+                "retries": "3"
+            ],
+            createdAt: Calendar.current.date(byAdding: .day, value: -12, to: Date()),
+            updatedAt: Date()
+        )
+        
+        let orderToAuthAPI = ServiceToServiceDependencyResponse(
+            serviceDependencyId: UUID(),
+            consumerServiceId: orderService.serviceId,
+            providerServiceId: authService.serviceId,
+            environmentCode: "prod",
+            description: "Проверка токенов аутентификации",
+            dependencyType: .AUTHENTICATION,
+            config: [
+                "endpoint": "/api/v1/auth/verify",
+                "timeout": "3s",
+                "retries": "2"
+            ],
+            createdAt: Calendar.current.date(byAdding: .day, value: -12, to: Date()),
+            updatedAt: Date()
+        )
+        
+        let paymentToOrderAPI = ServiceToServiceDependencyResponse(
+            serviceDependencyId: UUID(),
+            consumerServiceId: paymentService.serviceId,
+            providerServiceId: orderService.serviceId,
+            environmentCode: "prod",
+            description: "Получение деталей заказа для обработки платежа",
+            dependencyType: .API_CALL,
+            config: [
+                "endpoint": "/api/v1/orders",
+                "timeout": "8s",
+                "retries": "3"
+            ],
+            createdAt: Calendar.current.date(byAdding: .day, value: -10, to: Date()),
+            updatedAt: Date()
+        )
+        
+        let userToAuthAPI = ServiceToServiceDependencyResponse(
+            serviceDependencyId: UUID(),
+            consumerServiceId: userService.serviceId,
+            providerServiceId: authService.serviceId,
+            environmentCode: "prod",
+            description: "Проверка прав доступа пользователей",
+            dependencyType: .AUTHENTICATION,
+            config: [
+                "endpoint": "/api/v1/auth/authorize",
+                "timeout": "3s",
+                "retries": "2"
+            ],
+            createdAt: Calendar.current.date(byAdding: .day, value: -15, to: Date()),
+            updatedAt: Date()
+        )
+        
+        let orderToPaymentEvent = ServiceToServiceDependencyResponse(
+            serviceDependencyId: UUID(),
+            consumerServiceId: orderService.serviceId,
+            providerServiceId: paymentService.serviceId,
+            environmentCode: "prod",
+            description: "Подписка на события обработки платежей",
+            dependencyType: .EVENT_SUBSCRIPTION,
+            config: [
+                "topic": "payment.events",
+                "consumer_group": "order-service",
+                "auto_offset_reset": "earliest"
+            ],
+            createdAt: Calendar.current.date(byAdding: .day, value: -8, to: Date()),
+            updatedAt: Date()
+        )
+        
+        mockServiceToServiceDependencies = [
+            orderToUserAPI, orderToAuthAPI, paymentToOrderAPI, userToAuthAPI, orderToPaymentEvent
+        ]
+    }
+    
+    // MARK: - Service-to-Service Dependencies API
+    
+    func fetchServiceToServiceDependencies(serviceId: UUID, environmentCode: String? = nil) async throws -> [ServiceToServiceDependencyResponse] {
+        try await Task.sleep(nanoseconds: 300_000_000)
+        
+        var dependencies = mockServiceToServiceDependencies.filter { $0.consumerServiceId == serviceId }
+        
+        if let environmentCode = environmentCode {
+            dependencies = dependencies.filter { $0.environmentCode == environmentCode }
+        }
+        
+        return dependencies
+    }
+    
+    func createServiceToServiceDependency(consumerServiceId: UUID, request: CreateServiceToServiceDependencyRequest) async throws -> ServiceToServiceDependencyResponse {
+        try await Task.sleep(nanoseconds: 500_000_000)
+        
+        // Check if dependency already exists
+        let exists = mockServiceToServiceDependencies.contains { dependency in
+            dependency.consumerServiceId == consumerServiceId &&
+            dependency.providerServiceId == request.providerServiceId &&
+            dependency.environmentCode == request.environmentCode
+        }
+        
+        if exists {
+            throw APIError.dependencyAlreadyExists
+        }
+        
+        // Check if services exist
+        guard mockServices.contains(where: { $0.serviceId == consumerServiceId }) else {
+            throw APIError.serviceNotFound
+        }
+        
+        guard mockServices.contains(where: { $0.serviceId == request.providerServiceId }) else {
+            throw APIError.serviceNotFound
+        }
+        
+        let newDependency = ServiceToServiceDependencyResponse(
+            serviceDependencyId: UUID(),
+            consumerServiceId: consumerServiceId,
+            providerServiceId: request.providerServiceId,
+            environmentCode: request.environmentCode,
+            description: request.description,
+            dependencyType: request.dependencyType,
+            config: request.config,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        
+        mockServiceToServiceDependencies.append(newDependency)
+        return newDependency
+    }
+    
+    func updateServiceToServiceDependency(serviceId: UUID, dependencyId: UUID, request: UpdateServiceToServiceDependencyRequest) async throws -> ServiceToServiceDependencyResponse {
+        try await Task.sleep(nanoseconds: 400_000_000)
+        
+        guard let index = mockServiceToServiceDependencies.firstIndex(where: { 
+            $0.serviceDependencyId == dependencyId && $0.consumerServiceId == serviceId 
+        }) else {
+            throw APIError.dependencyNotFound
+        }
+        
+        var dependency = mockServiceToServiceDependencies[index]
+        
+        if let providerServiceId = request.providerServiceId {
+            dependency = ServiceToServiceDependencyResponse(
+                serviceDependencyId: dependency.serviceDependencyId,
+                consumerServiceId: dependency.consumerServiceId,
+                providerServiceId: providerServiceId,
+                environmentCode: request.environmentCode ?? dependency.environmentCode,
+                description: request.description ?? dependency.description,
+                dependencyType: request.dependencyType ?? dependency.dependencyType,
+                config: request.config ?? dependency.config,
+                createdAt: dependency.createdAt,
+                updatedAt: Date()
+            )
+        }
+        
+        mockServiceToServiceDependencies[index] = dependency
+        return dependency
+    }
+    
+    func deleteServiceToServiceDependency(serviceId: UUID, dependencyId: UUID) async throws {
+        try await Task.sleep(nanoseconds: 300_000_000)
+        
+        guard let index = mockServiceToServiceDependencies.firstIndex(where: { 
+            $0.serviceDependencyId == dependencyId && $0.consumerServiceId == serviceId 
+        }) else {
+            throw APIError.dependencyNotFound
+        }
+        
+        mockServiceToServiceDependencies.remove(at: index)
     }
 }

@@ -159,6 +159,38 @@ struct CreateServiceDependencyRequest: Encodable {
     let configOverride: [String: String]
 }
 
+// MARK: - Service-to-Service Dependency Models
+
+struct ServiceToServiceDependencyResponse: Decodable, Identifiable {
+    let serviceDependencyId: UUID
+    let consumerServiceId: UUID
+    let providerServiceId: UUID
+    let environmentCode: String?
+    let description: String?
+    let dependencyType: ServiceDependencyType
+    let config: [String: String]
+    let createdAt: Date?
+    let updatedAt: Date?
+    
+    var id: UUID { serviceDependencyId }
+}
+
+struct CreateServiceToServiceDependencyRequest: Encodable {
+    let providerServiceId: UUID
+    let environmentCode: String?
+    let description: String?
+    let dependencyType: ServiceDependencyType
+    let config: [String: String]
+}
+
+struct UpdateServiceToServiceDependencyRequest: Encodable {
+    let providerServiceId: UUID?
+    let environmentCode: String?
+    let description: String?
+    let dependencyType: ServiceDependencyType?
+    let config: [String: String]?
+}
+
 enum DependencyType: String, Codable, CaseIterable {
     case LIBRARY = "LIBRARY"
     case SERVICE = "SERVICE"
@@ -208,6 +240,66 @@ enum DependencyType: String, Codable, CaseIterable {
             return "network"
         case .MESSAGE_QUEUE:
             return "tray.2"
+        }
+    }
+}
+
+enum ServiceDependencyType: String, Codable, CaseIterable {
+    case API_CALL = "API_CALL"
+    case EVENT_SUBSCRIPTION = "EVENT_SUBSCRIPTION"
+    case DATA_SHARING = "DATA_SHARING"
+    case AUTHENTICATION = "AUTHENTICATION"
+    case PROXY = "PROXY"
+    case LIBRARY_USAGE = "LIBRARY_USAGE"
+    
+    var displayName: String {
+        switch self {
+        case .API_CALL:
+            return "Вызовы API"
+        case .EVENT_SUBSCRIPTION:
+            return "Подписка на события"
+        case .DATA_SHARING:
+            return "Совместное использование данных"
+        case .AUTHENTICATION:
+            return "Аутентификация"
+        case .PROXY:
+            return "Проксирование запросов"
+        case .LIBRARY_USAGE:
+            return "Использование библиотек"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .API_CALL:
+            return "прямые HTTP вызовы между сервисами"
+        case .EVENT_SUBSCRIPTION:
+            return "подписка на события других сервисов"
+        case .DATA_SHARING:
+            return "совместное использование данных"
+        case .AUTHENTICATION:
+            return "аутентификация через другой сервис"
+        case .PROXY:
+            return "проксирование запросов через сервис"
+        case .LIBRARY_USAGE:
+            return "использование библиотек другого сервиса"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .API_CALL:
+            return "arrow.right.circle"
+        case .EVENT_SUBSCRIPTION:
+            return "bell.fill"
+        case .DATA_SHARING:
+            return "square.and.arrow.up.on.square"
+        case .AUTHENTICATION:
+            return "key.fill"
+        case .PROXY:
+            return "arrow.triangle.swap"
+        case .LIBRARY_USAGE:
+            return "book.closed.fill"
         }
     }
 }

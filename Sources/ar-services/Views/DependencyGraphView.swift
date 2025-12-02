@@ -7,6 +7,7 @@
 
 import SwiftUI
 import CoreGraphics
+import CoreGraphics
 
 struct DependencyGraphView: View {
     let dependencyViewModel: DependencyViewModel
@@ -66,8 +67,8 @@ struct DependencyGraphView: View {
         .background(Color(NSColor.controlBackgroundColor))
     }
     
-    // MARK: - Graph View
     @MainActor
+    private func graphView(graph: ServiceDependencyGraphResponse) -> some View {
     private func graphView(graph: ServiceDependencyGraphResponse) -> some View {
         GeometryReader { geometry in
             ZStack {
@@ -78,8 +79,8 @@ struct DependencyGraphView: View {
                 // Graph Content
                 ZStack {
                     // Edges (connections)
-                    ForEach(graph.edges) { edge in
                         if let fromNode = graph.nodes.first(where: { $0.id == edge.from }),
+                           let toNode = graph.nodes.first(where: { $0.id == edge.to }) {
                            let toNode = graph.nodes.first(where: { $0.id == edge.to }) {
                             EdgeView(
                                 from: nodePosition(for: fromNode, in: geometry.size),
@@ -129,7 +130,7 @@ struct DependencyGraphView: View {
         }
     }
     
-    // MARK: - Loading or Empty View
+    @MainActor
     @MainActor
     private var loadingOrEmptyView: some View {
         VStack(spacing: 16) {
@@ -345,5 +346,4 @@ struct EdgeView: View {
 
 #Preview {
     DependencyGraphView(dependencyViewModel: DependencyViewModel())
-        .environmentObject(DependencyViewModel())
 }

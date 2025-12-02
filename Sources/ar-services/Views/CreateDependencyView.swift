@@ -25,11 +25,20 @@ struct CreateDependencyView: View {
     @State private var selectedDependencyId: UUID?
     @State private var environmentCode: String = "prod"
     
+    // For service-to-service dependency
+    @State private var consumerServiceId: UUID?
+    @State private var providerServiceId: UUID?
+    @State private var serviceToServiceDescription: String = ""
+    @State private var serviceDependencyType: ServiceDependencyType = .API_CALL
+    @State private var serviceToServiceConfig: [String: String] = [:]
+    @State private var serviceEnvironmentCode: String = "prod"
+    
     @State private var isCreating = false
     
     enum CreateMode: String, CaseIterable {
         case dependency = "Новая зависимость"
         case serviceDependency = "Добавить к сервису"
+        case serviceToService = "Связь между сервисами"
     }
     
     private var isFormValid: Bool {
@@ -38,6 +47,8 @@ struct CreateDependencyView: View {
             return !dependencyName.isEmpty && !dependencyVersion.isEmpty
         case .serviceDependency:
             return selectedServiceId != nil && selectedDependencyId != nil
+        case .serviceToService:
+            return consumerServiceId != nil && providerServiceId != nil && consumerServiceId != providerServiceId
         }
     }
     
@@ -58,6 +69,8 @@ struct CreateDependencyView: View {
                             dependencyFormSection
                         case .serviceDependency:
                             serviceDependencyFormSection
+                        case .serviceToService:
+                            serviceToServiceFormSection
                         }
                     }
                     .padding()
@@ -288,6 +301,143 @@ struct CreateDependencyView: View {
         }
     }
     
+    // MARK: - Service-to-Service Form
+    
+    private var serviceToServiceFormSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Создать связь между сервисами")
+                .font(.headline)
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Сервис-потребитель")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                Picker("Выберите сервис-потребитель", selection: $consumerServiceId) {
+                    Text("Выберите сервис").tag(nil as UUID?)
+                    ForEach(dependencyViewModel.services, id: \.serviceId) { service in
+                        Text(service.name).tag(service.serviceId as UUID?)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Сервис-провайдер")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                Picker("Выберите сервис-провайдер", selection: $providerServiceId) {
+                    Text("Выберите сервис").tag(nil as UUID?)
+                    ForEach(dependencyViewModel.services.filter { $0.serviceId != consumerServiceId }, id: \.serviceId) { service in
+                        Text(service.name).tag(service.serviceId as UUID?)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Тип зависимости")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                Picker("Тип зависимости", selection: $serviceDependencyType) {
+                    ForEach(ServiceDependencyType.allCases, id: \.self) { type in
+                        HStack {
+                            Image(systemName: type.icon)
+                            Text(type.displayName)
+                        }
+                        .tag(type)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Описание")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                TextField("Описание зависимости...", text: $serviceToServiceDescription, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(3...6)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Окружение")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                TextField("prod, dev, staging", text: $serviceEnvironmentCode)
+                    .textFieldStyle(.roundedBorder)
+            }
+            
+            // Configuration section
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Конфигурация")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                VStack(spacing: 8) {
+                    switch serviceDependencyType {
+                    case .API_CALL:
+                        configField(key: "endpoint", placeholder: "/api/v1/endpoint")
+                        configField(key: "timeout", placeholder: "5s")
+                        configField(key: "retries", placeholder: "3")
+                    case .EVENT_SUBSCRIPTION:
+                        configField(key: "topic", placeholder: "events.topic")
+                        configField(key: "consumer_group", placeholder: "service-name")
+                        configField(key: "auto_offset_reset", placeholder: "earliest")
+                    case .DATA_SHARING:
+                        configField(key: "database", placeholder: "shared_db")
+                        configField(key: "table", placeholder: "shared_table")
+                    case .AUTHENTICATION:
+                        configField(key: "endpoint", placeholder: "/api/v1/auth")
+                        configField(key: "timeout", placeholder: "3s")
+                    case .PROXY:
+                        configField(key: "upstream", placeholder: "http://service:8080")
+                        configField(key: "path", placeholder: "/api/*")
+                    case .LIBRARY_USAGE:
+                        configField(key: "library", placeholder: "shared-lib")
+                        configField(key: "version", placeholder: "1.0.0")
+                    }
+                }
+            }
+            
+            // Type description
+            VStack(alignment: .leading, spacing: 4) {
+                Text("О типе зависимости")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+                
+                Text(serviceDependencyType.description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(12)
+            .background(Color(.systemGray))
+            .cornerRadius(8)
+        }
+    }
+    
+    private func configField(key: String, placeholder: String) -> some View {
+        HStack {
+            Text("\(key):")
+                .font(.caption)
+                .frame(width: 80, alignment: .leading)
+            
+            TextField(placeholder, text: Binding(
+                get: { serviceToServiceConfig[key] ?? "" },
+                set: { serviceToServiceConfig[key] = $0.isEmpty ? nil : $0 }
+            ))
+            .textFieldStyle(.roundedBorder)
+        }
+    }
+    
     // MARK: - Buttons View
     
     private var buttonsView: some View {
@@ -341,6 +491,26 @@ struct CreateDependencyView: View {
                 serviceId: serviceId,
                 dependencyId: dependencyId,
                 environmentCode: environmentCode.isEmpty ? nil : environmentCode
+            )
+            
+        case .serviceToService:
+            guard let consumerServiceId = consumerServiceId,
+                  let providerServiceId = providerServiceId else {
+                isCreating = false
+                return
+            }
+            
+            let request = CreateServiceToServiceDependencyRequest(
+                providerServiceId: providerServiceId,
+                environmentCode: serviceEnvironmentCode.isEmpty ? nil : serviceEnvironmentCode,
+                description: serviceToServiceDescription.isEmpty ? nil : serviceToServiceDescription,
+                dependencyType: serviceDependencyType,
+                config: serviceToServiceConfig
+            )
+            
+            success = await dependencyViewModel.createServiceToServiceDependency(
+                consumerServiceId: consumerServiceId,
+                request: request
             )
         }
         
