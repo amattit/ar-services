@@ -139,8 +139,10 @@ private let baseURL = "http://localhost:8080/api/v1"
         }.count
         
         // Для простоты используем заглушки для endpoints и deprecated
-        let endpoints = services.reduce(0) { total, service in
-            total + (service.environments?.count ?? 0)
+        var endpointCounter = 0
+        for service in services {
+            let epoints = try await fetchServiceEndpoints(serviceId: service.id)
+            endpointCounter+=epoints.count
         }
         
         let deprecated = services.filter { $0.serviceType == .LIBRARY }.count
@@ -148,7 +150,7 @@ private let baseURL = "http://localhost:8080/api/v1"
         return DashboardStats(
             totalServices: totalServices,
             activeServices: activeServices,
-            endpoints: endpoints,
+            endpoints: endpointCounter,
             deprecated: deprecated
         )
     }

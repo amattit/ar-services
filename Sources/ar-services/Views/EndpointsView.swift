@@ -20,7 +20,8 @@ struct EndpointsView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
+        ScrollView {
+//        VStack(spacing: 0) {
             // Header with stats
             EndpointStatsView(stats: endpointViewModel.endpointStats)
                 .padding()
@@ -91,18 +92,24 @@ struct EndpointsView: View {
                 EmptyEndpointsView(hasEndpoints: !endpointViewModel.endpoints.isEmpty)
                 Spacer()
             } else {
-                ScrollView {
+//                ScrollView {
                     LazyVStack(spacing: 8) {
                         ForEach(filteredEndpoints) { endpoint in
-                            EndpointRowView(endpoint: endpoint)
-                                .onTapGesture {
-                                    selectedEndpoint = endpoint
-                                    showingEndpointDetail = true
-                                }
+                            NavigationLink {
+                                EndpointDetailView(endpoint: endpoint, service: service)
+                            } label: {
+                                EndpointRowView(endpoint: endpoint)
+                            }
+
+//                            EndpointRowView(endpoint: endpoint)
+//                                .onTapGesture {
+//                                    selectedEndpoint = endpoint
+//                                    showingEndpointDetail = true
+//                                }
                         }
                     }
                     .padding()
-                }
+//                }
             }
         }
         .navigationTitle("Endpoints")

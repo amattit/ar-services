@@ -403,7 +403,7 @@ enum CallType: String, Codable, CaseIterable {
 }
 
 enum OperationType: String, Codable, CaseIterable {
-    case READ = "READ"
+    case read = "READ"
     case write = "WRITE"
     case readWrite = "READ_WRITE"
     

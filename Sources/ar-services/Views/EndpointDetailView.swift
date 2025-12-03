@@ -14,8 +14,8 @@ struct EndpointDetailView: View {
     @State private var selectedTab = 0
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
+//        NavigationView {
+            ScrollView {
                 // Header
                 EndpointHeaderView(endpoint: endpoint, service: service)
                     .padding()
@@ -54,15 +54,15 @@ struct EndpointDetailView: View {
                 }
             }
             .navigationTitle("Детали Endpoint")
-            .navigationBarTitleDisplayMode(.inline)
+//            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .primaryAction) {
                     Button("Закрыть") {
                         dismiss()
                     }
                 }
             }
-        }
+//        }
         .frame(minWidth: 800, minHeight: 600)
     }
 }
