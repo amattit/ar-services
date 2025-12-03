@@ -350,6 +350,132 @@ struct DependencyEdge: Decodable, Identifiable {
     }
 }
 
+// MARK: - Endpoint Models
+
+enum EndpointMethod: String, Codable, CaseIterable {
+    case GET = "GET"
+    case POST = "POST"
+    case PUT = "PUT"
+    case PATCH = "PATCH"
+    case DELETE = "DELETE"
+    case HEAD = "HEAD"
+    case OPTIONS = "OPTIONS"
+    
+    var displayName: String {
+        return rawValue
+    }
+    
+    var color: String {
+        switch self {
+        case .GET:
+            return "blue"
+        case .POST:
+            return "green"
+        case .PUT:
+            return "orange"
+        case .PATCH:
+            return "purple"
+        case .DELETE:
+            return "red"
+        case .HEAD:
+            return "gray"
+        case .OPTIONS:
+            return "gray"
+        }
+    }
+}
+
+enum CallType: String, Codable, CaseIterable {
+    case SYNC = "SYNC"
+    case ASYNC = "ASYNC"
+    case CALLBACK = "CALLBACK"
+    
+    var displayName: String {
+        switch self {
+        case .SYNC:
+            return "Синхронный"
+        case .ASYNC:
+            return "Асинхронный"
+        case .CALLBACK:
+            return "Обратный вызов"
+        }
+    }
+}
+
+enum OperationType: String, Codable, CaseIterable {
+    case read = "READ"
+    case write = "WRITE"
+    case readWrite = "READ_WRITE"
+    
+    var displayName: String {
+        switch self {
+        case .read:
+            return "Чтение"
+        case .write:
+            return "Запись"
+        case .readWrite:
+            return "Чтение/Запись"
+        }
+    }
+}
+
+struct EndpointResponse: Decodable, Identifiable {
+    let endpointId: UUID
+    let serviceId: UUID
+    let method: EndpointMethod
+    let path: String
+    let summary: String
+    let requestSchema: [String: AnyCodable]?
+    let responseSchemas: [String: AnyCodable]?
+    let auth: [String: AnyCodable]?
+    let rateLimit: [String: AnyCodable]?
+    let metadata: [String: AnyCodable]?
+    let calls: [EndpointCallResponse]?
+    let databases: [EndpointDatabaseResponse]?
+    let createdAt: Date
+    let updatedAt: Date
+    
+    var id: UUID { endpointId }
+    
+    var fullPath: String {
+        return "\(method.rawValue) \(path)"
+    }
+}
+
+struct EndpointCallResponse: Decodable, Identifiable {
+    let dependencyId: UUID
+    let callType: CallType
+    let config: [String: AnyCodable]?
+    let dependency: DependencyResponse
+    
+    var id: UUID { dependencyId }
+}
+
+struct EndpointDatabaseResponse: Decodable, Identifiable {
+    let databaseId: UUID
+    let operationType: OperationType
+    let tableNames: [String]?
+    let config: [String: AnyCodable]?
+    let database: DatabaseResponse
+    
+    var id: UUID { databaseId }
+}
+
+struct DatabaseResponse: Decodable, Identifiable {
+    let databaseId: UUID
+    let name: String
+    let description: String?
+    let databaseType: String
+    let host: String
+    let port: Int
+    let databaseName: String
+    let config: [String: AnyCodable]?
+    let createdAt: Date?
+    let updatedAt: Date?
+    
+    var id: UUID { databaseId }
+}
+
 struct AnyCodable: Codable {
     let value: Any
     

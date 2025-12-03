@@ -139,8 +139,10 @@ private let baseURL = "http://localhost:8080/api/v1"
         }.count
         
         // Для простоты используем заглушки для endpoints и deprecated
-        let endpoints = services.reduce(0) { total, service in
-            total + (service.environments?.count ?? 0)
+        var endpointCounter = 0
+        for service in services {
+            let epoints = try await fetchServiceEndpoints(serviceId: service.id)
+            endpointCounter+=epoints.count
         }
         
         let deprecated = services.filter { $0.serviceType == .LIBRARY }.count
@@ -148,7 +150,7 @@ private let baseURL = "http://localhost:8080/api/v1"
         return DashboardStats(
             totalServices: totalServices,
             activeServices: activeServices,
-            endpoints: endpoints,
+            endpoints: endpointCounter,
             deprecated: deprecated
         )
     }
@@ -435,6 +437,32 @@ private let baseURL = "http://localhost:8080/api/v1"
         
         return try decoder.decode(ServiceDependencyGraphResponse.self, from: data)
     }
+    
+    // MARK: - Endpoints API
+    
+    func fetchServiceEndpoints(serviceId: UUID) async throws -> [EndpointResponse] {
+        let url = URL(string: "\(baseURL)/services/\(serviceId)/endpoints")!
+        let (data, response) = try await session.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw APIError.invalidResponse
+        }
+        
+        return try decoder.decode([EndpointResponse].self, from: data)
+    }
+    
+    func fetchEndpoint(serviceId: UUID, endpointId: UUID) async throws -> EndpointResponse {
+        let url = URL(string: "\(baseURL)/services/\(serviceId)/endpoints/\(endpointId)")!
+        let (data, response) = try await session.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw APIError.endpointNotFound
+        }
+        
+        return try decoder.decode(EndpointResponse.self, from: data)
+    }
 }
 
 // MARK: - API Errors
@@ -445,6 +473,7 @@ enum APIError: LocalizedError {
     case serviceAlreadyExists
     case dependencyNotFound
     case dependencyAlreadyExists
+    case endpointNotFound
     case validationError
     case serverError
     case networkError
@@ -461,6 +490,8 @@ enum APIError: LocalizedError {
             return "Зависимость не найдена"
         case .dependencyAlreadyExists:
             return "Зависимость уже существует"
+        case .endpointNotFound:
+            return "Endpoint не найден"
         case .validationError:
             return "Ошибка валидации данных"
         case .serverError:
